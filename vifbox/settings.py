@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'vifApp',
     'phonenumber_field',
+    'social_django',
 ]
 
 MIDDLEWARE = [
@@ -68,6 +69,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
             ],
         },
     },
@@ -117,6 +120,14 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.github.GithubOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+SOCIAL_AUTH_GITHUB_KEY = "65ad233b6c86eb522646" 
+SOCIAL_AUTH_GITHUB_SECRET = "b8b1b739cf432dd8772bb31e6ea01e33e4c12dc4"  
+
 # Internationalization
 # https://docs.djangoproject.com/en/3.2/topics/i18n/
 
@@ -147,7 +158,7 @@ AUTH_USER_MODEL = 'vifApp.User'
 CORS_ORIGIN_ALLOW_ALL = True  # will change this to frontend react host and prevent others
 CORS_ALLOW_CREDENTIALS = True
 
-
+LOGIN_REDIRECT_URL ='/api/home/'
 # set email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

@@ -5,7 +5,7 @@ from .models import User
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'password']
+        fields = ['username', 'first_name', 'last_name', 'email', 'password']
         extra_kwargs = {
             'password': {'write_only': True}
         }
@@ -25,6 +25,14 @@ class ChangePasswordSerializer(serializers.Serializer):
     model = User
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True)
+    new_password1 = serializers.CharField(required=True)
+
+
+class UpdateProfileSerializer(serializers.Serializer):
+    model = User
+    name = serializers.CharField(required=True)
+    username = serializers.CharField(required=True)
+    phone = serializers.CharField(required=True)
 
 
 class ResetPasswordSerializer(serializers.Serializer):
