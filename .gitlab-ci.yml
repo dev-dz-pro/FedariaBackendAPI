@@ -1,4 +1,4 @@
-image: docker:latest
+image: docker:dind
 
 stages:          # List of stages for jobs, and their order of execution
   - build
