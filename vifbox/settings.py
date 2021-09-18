@@ -158,7 +158,7 @@ AUTH_USER_MODEL = 'vifApp.User'
 CORS_ORIGIN_ALLOW_ALL = True  # will change this to frontend react host and prevent others
 CORS_ALLOW_CREDENTIALS = True
 
-LOGIN_REDIRECT_URL ='/api/home/'
+LOGIN_REDIRECT_URL ='/api/index/'
 # set email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
