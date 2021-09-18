@@ -1,6 +1,6 @@
 FROM python:3.7
 
-RUN apt update && apt --no-cache install postgresql-client
+RUN apt update && apt  install postgresql-client
 
 WORKDIR /usr/src/app
 
