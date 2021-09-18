@@ -2,7 +2,8 @@ from django.http import response
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from .serializers import UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, UpdateProfileSerializer
+from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
+                            UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer)
 from .models import User, UserNotification
 import jwt, datetime
 from .utils import VifUtils
@@ -15,7 +16,7 @@ from django.core.serializers import json
 
 class RegisterView(APIView):
     def post(self, request):
-
+        
         email_name = request.data["email"].split("@")
         username = email_name[0] + "_" +email_name[1].split(".")[0]
         request.data["username"] = username
@@ -51,7 +52,13 @@ class EmailVerifyView(APIView):
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
-            return Response({"email": "Successfuly activated"})
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Email Successfuly activated',
+                'data': []
+            }
+            return Response(response)
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unauthenticated!')
 
@@ -59,10 +66,19 @@ class EmailVerifyView(APIView):
 
 class LoginView(APIView):
     def post(self, request):
-        email = request.data['email']
-        password = request.data['password']
-        remember_me = request.data['remember_me']
-        user = User.objects.filter(email=email).first()
+        
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user_data = serializer.data
+        email = user_data['email']
+        password = user_data['password']
+        remember_me = user_data['remember_me']
+
+        if str(email).__contains__("@"):
+            user = User.objects.filter(email=email).first()
+        else:
+            user = User.objects.filter(username=email).first()
         if user is None:
             raise AuthenticationFailed('User not found!')
         if not user.check_password(password):
@@ -77,7 +93,7 @@ class LoginView(APIView):
         if remember_me:
             response.set_cookie(key='jwt', value=token, httponly=True)
         else:
-            response.delete_cookie('jwt')
+            response.set_cookie(key='jwt', value=token, httponly=True, expires=300)
         response.data = {'jwt': token}
         return response
 
@@ -85,23 +101,11 @@ class LoginView(APIView):
 
 class HomeView(APIView):
     def get(self, request):
-        # print(reverse('social:begin', kwargs={'backend':'github'}))
-        payload = permission_authontication_jwt(request)
+        payload = permission_authontication_jwt(request) # print(reverse('social:begin', kwargs={'backend':'github'}))
         user = User.objects.filter(id=payload['id']).first()
         serializer = UserSerializer(user)
         return Response(serializer.data)
     
-# class IndexView(APIView):
-#     def get(self, request):
-#         token = request.COOKIES.get('dotcom_user')
-#         print(token)
-#         return Response({})
-
-# class AUTHORIZE(APIView):
-#     def get(self, request):
-#         print(request.data)
-#         return Response({})
-   
 
 class ProfileView(APIView):
 
@@ -110,17 +114,24 @@ class ProfileView(APIView):
         user = User.objects.filter(id=payload['id']).first()
         UserNotification.objects.create(notification_user=user, notification_text="welcome to vifbox")
         notification = UserNotification.objects.filter(notification_user=user)
-        kys = ("notify_from", "notify_text", "notify_date")
-        notf = [{kys[0]: f"{nt.notification_from}", kys[1]: f"{nt.notification_text}", kys[2]: f"{nt.created_at}"} for nt in notification] 
+        kys = ("from", "desc", "url", "date") 
+        notf = [{kys[0]: f"{nt.notification_from}", kys[1]: f"{nt.notification_text}", kys[2]: f"{nt.notification_url}", kys[3]: f"{nt.created_at}"} for nt in notification] 
         response = {
-            "name": f"{user.first_name}",
-            "username": f"{user.username}",
-            "email": f"{user.email}",
-            "phone_number": f"{user.phone_number}",
-            "notification": notf
+            'status': 'success',
+            'code': status.HTTP_200_OK,
+            'data': {
+                "name": f"{user.first_name}",
+                "username": f"{user.username}",
+                "profile_img_url": f"{user.profile_image}",
+                "email": f"{user.email}",
+                "phone_number": f"{user.phone_number}",
+                "notification": notf
+            }
         }
         return Response(response)
 
+
+class ProfileInfoUpdate(APIView):
     def post(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -134,29 +145,56 @@ class ProfileView(APIView):
             response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
-                'message': 'Profile updated successfully',
+                'message': 'Profile info updated successfully',
                 'data': []
             }
             return Response(response)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class SettingsView(APIView):
+class ProfileImageUpdate(APIView):
+    def post(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = UpdateProfileImageSerializer(data=request.data)
+        if serializer.is_valid(raise_exception=True):
+            user_data = serializer.data
+            user.profile_image = user_data["profile_img_url"]
+            user.profile_title = user_data["profile_title"]
+            user.save()
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Profile image updated successfully',
+                'data': []
+            }
+            return Response(response)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+
+class SettingsView(APIView):
     def get(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        # UserNotification.objects.create(notification_user=user, notification_text="welcome to vifbox")
         notification = UserNotification.objects.filter(notification_user=user)
-        kys = ("notify_from", "notify_text", "notify_date")
-        notf = [{kys[0]: f"{nt.notification_from}", kys[1]: f"{nt.notification_text}", kys[2]: f"{nt.created_at}"} for nt in notification] 
+        kys = ("from", "desc", "url", "date") 
+        notf = [{kys[0]: f"{nt.notification_from}", kys[1]: f"{nt.notification_text}", kys[2]: f"{nt.notification_url}", kys[3]: f"{nt.created_at}"} for nt in notification] 
         response = {
-            "name": f"{user.first_name}",
-            "is_verified": f"{user.is_verified}",
-            "notification": notf
+            'status': 'success',
+            'code': status.HTTP_200_OK,
+            'data': {
+                "name": f"{user.first_name}",
+                "username": f"{user.username}",
+                "profile_img_url": f"{user.profile_image}",
+                "is_verified": f"{user.is_verified}",
+                "notification": notf
+            }
         }
         return Response(response)
 
+
+class SettingsInfoUpdate(APIView):
     def post(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -184,7 +222,12 @@ class LogoutView(APIView):
     def post(self, request):
         response = Response()
         response.delete_cookie('jwt')
-        response.data = {'message': 'success'}
+        response.data = {
+            'status': 'success',
+            'code': status.HTTP_200_OK,
+            'message': 'Logged out successfully',
+            'data': []
+        }
         return response
 
 
@@ -249,6 +292,9 @@ def permission_authontication_jwt(request):
     except jwt.ExpiredSignatureError:
         raise AuthenticationFailed('Unauthenticated!')
     return payload
+
+
+
 
 
 
@@ -347,3 +393,15 @@ def permission_authontication_jwt(request):
 #             }
 #             return Response(response)
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class IndexView(APIView):
+#     def get(self, request):
+#         token = request.COOKIES.get('dotcom_user')
+#         print(token)
+#         return Response({})
+
+# class AUTHORIZE(APIView):
+#     def get(self, request):
+#         print(request.data)
+#         return Response({})
+   

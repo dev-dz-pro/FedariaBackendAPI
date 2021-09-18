@@ -9,9 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'password': {'write_only': True}
         }
-
     def create(self, validated_data):
-        # validated_data["name"] = "testname" # to play with the validated data genarate a username and save it
         password = validated_data.pop('password', None)
         instance = self.Meta.model(**validated_data)
         if password is not None:
@@ -19,6 +17,12 @@ class UserSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
+class LoginSerializer(serializers.Serializer):
+    model = User
+    email = serializers.CharField(required=True)
+    password = serializers.CharField(required=True)
+    remember_me = serializers.BooleanField(required=True)
 
 
 class ChangePasswordSerializer(serializers.Serializer):
@@ -33,6 +37,12 @@ class UpdateProfileSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     username = serializers.CharField(required=True)
     phone = serializers.CharField(required=True)
+
+
+class UpdateProfileImageSerializer(serializers.Serializer):
+    model = User
+    profile_img_url = serializers.CharField(required=True)
+    profile_title = serializers.CharField(required=True)
 
 
 class ResetPasswordSerializer(serializers.Serializer):
