@@ -125,20 +125,16 @@ AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
 )
 
-SOCIAL_AUTH_GITHUB_KEY = "65ad233b6c86eb522646" 
-SOCIAL_AUTH_GITHUB_SECRET = "b8b1b739cf432dd8772bb31e6ea01e33e4c12dc4"  
+SOCIAL_AUTH_GITHUB_KEY = os.environ.get('github_key') 
+SOCIAL_AUTH_GITHUB_SECRET = os.environ.get('github_secret')
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_L10N = True
-
 USE_TZ = True
 
 
@@ -159,6 +155,8 @@ CORS_ORIGIN_ALLOW_ALL = True  # will change this to frontend react host and prev
 CORS_ALLOW_CREDENTIALS = True
 
 LOGIN_REDIRECT_URL ='/api/home/'
+
+
 # set email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
