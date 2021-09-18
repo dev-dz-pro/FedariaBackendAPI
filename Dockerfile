@@ -1,6 +1,6 @@
-FROM python:3.7-alpine
+FROM python:3.7
 
-RUN apk --no-cache add postgresql-client
+RUN apt update && apt --no-cache install postgresql-client
 
 WORKDIR /usr/src/app
 
