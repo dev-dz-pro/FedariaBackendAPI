@@ -86,17 +86,16 @@ class LoginView(APIView):
 class HomeView(APIView):
     def get(self, request):
         # print(reverse('social:begin', kwargs={'backend':'github'}))
-        print(request.data)
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         serializer = UserSerializer(user)
         return Response(serializer.data)
     
-class IndexView(APIView):
-    def get(self, request):
-        token = request.COOKIES.get('dotcom_user')
-        print(token)
-        return Response({})
+# class IndexView(APIView):
+#     def get(self, request):
+#         token = request.COOKIES.get('dotcom_user')
+#         print(token)
+#         return Response({})
 
 # class AUTHORIZE(APIView):
 #     def get(self, request):
