@@ -100,7 +100,7 @@ DATABASES = {
 #     }
 # }
 
-ALLOWED_HOSTS = ["http://a76b34aeac98a469298febb11353e5b5-311242608.eu-west-3.elb.amazonaws.com", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["a76b34aeac98a469298febb11353e5b5-311242608.eu-west-3.elb.amazonaws.com", "localhost", "127.0.0.1"]
 
 
 # Password validation
