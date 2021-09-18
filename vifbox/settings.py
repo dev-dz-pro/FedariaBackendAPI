@@ -125,8 +125,10 @@ AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
 )
 
-SOCIAL_AUTH_GITHUB_KEY = os.environ.get('github_key') 
-SOCIAL_AUTH_GITHUB_SECRET = os.environ.get('github_secret')
+
+ALLOWED_HOSTS = ["http://a76b34aeac98a469298febb11353e5b5-311242608.eu-west-3.elb.amazonaws.com", "localhost", "127.0.0.1"]
+# SOCIAL_AUTH_GITHUB_KEY = os.environ.get('github_key') 
+# SOCIAL_AUTH_GITHUB_SECRET = os.environ.get('github_secret')
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.2/topics/i18n/
