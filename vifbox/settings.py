@@ -21,12 +21,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+)3(budb97=04h1&%wlmmt1-=hf-72e5beeogn5+mf(e%q+obu'
+SECRET_KEY = os.environ.get('SECRET_KEY') 
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1"]
 
 
 # Application definition
@@ -89,14 +89,15 @@ DATABASES = {
     }
 }
 
+
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'postgres',
-#         'USER': 'postgres',
-#         'PASSWORD': '123',
-#         'HOST': '127.0.0.1',
-#         'PORT': '5432',
+#         'NAME': os.environ.get('POSTGRES_DB'),
+#         'USER': os.environ.get('POSTGRES_USER'),
+#         'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
+#         'HOST': os.environ.get('POSTGRES_HOST'),
+#         'PORT': os.environ.get('POSTGRES_PORT'),
 #     }
 # }
 
@@ -120,13 +121,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-AUTHENTICATION_BACKENDS = (
-    'social_core.backends.github.GithubOAuth2',
-    'django.contrib.auth.backends.ModelBackend',
-)
+# AUTHENTICATION_BACKENDS = (
+#     'social_core.backends.github.GithubOAuth2',
+#     'django.contrib.auth.backends.ModelBackend',
+# )
 
-SOCIAL_AUTH_GITHUB_KEY = os.environ.get('github_key') 
-SOCIAL_AUTH_GITHUB_SECRET = os.environ.get('github_secret')
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.2/topics/i18n/
@@ -154,23 +153,23 @@ AUTH_USER_MODEL = 'vifApp.User'
 CORS_ORIGIN_ALLOW_ALL = True  # will change this to frontend react host and prevent others
 CORS_ALLOW_CREDENTIALS = True
 
-LOGIN_REDIRECT_URL ='/api/home/'
+# LOGIN_REDIRECT_URL ='/api/home/'
 
 
 # set email configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_HOST_USER = os.environ.get('gm_user') 
-EMAIL_HOST_PASSWORD = os.environ.get('gm_pass')
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = 'Veriblaster Team <noreply@veriblaster.com>'
-
-
-# EMAIL_USE_TLS = True
-# EMAIL_HOST = 'smtp.office365.com'
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_HOST_USER = os.environ.get('gm_user') 
+# EMAIL_HOST_PASSWORD = os.environ.get('gm_pass')
 # EMAIL_PORT = 587
-# EMAIL_HOST_USER = 'aaaaa@company.com'
-# EMAIL_HOST_PASSWORD = 'pppppp'
-# SERVER_EMAIL = EMAIL_HOST_USER
-# DEFAULT_FROM_EMAIL = 'Vifbox Team <noreply@vifbox.com>'
+# EMAIL_USE_TLS = True
+# DEFAULT_FROM_EMAIL = 'Veriblaster Team <noreply@veriblaster.com>'
+
+
+EMAIL_USE_TLS = True
+EMAIL_HOST = 'smtp.office365.com'
+EMAIL_PORT = 587
+EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
+EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS') 
+SERVER_EMAIL = EMAIL_HOST_USER
+DEFAULT_FROM_EMAIL = 'Vifbox Team <noreply@vifbox.com>'

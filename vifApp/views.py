@@ -11,7 +11,7 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from rest_framework import status
 from django.conf import settings
-from django.core.serializers import json
+import requests
 
 
 class RegisterView(APIView):
@@ -42,9 +42,9 @@ class RegisterView(APIView):
         return Response(user_data)
 
 
-
 class EmailVerifyView(APIView):
     def get(self, request):
+        payload = permission_authontication_jwt(request)
         token = request.GET["token"]
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
@@ -60,13 +60,13 @@ class EmailVerifyView(APIView):
             }
             return Response(response)
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Unauthenticated!')
+            raise AuthenticationFailed('Token expired!')
 
 
 
 class LoginView(APIView):
     def post(self, request):
-        
+
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -105,7 +105,8 @@ class HomeView(APIView):
         user = User.objects.filter(id=payload['id']).first()
         serializer = UserSerializer(user)
         return Response(serializer.data)
-    
+
+
 
 class ProfileView(APIView):
 
@@ -139,15 +140,22 @@ class ProfileInfoUpdate(APIView):
         if serializer.is_valid(raise_exception=True):
             user_data = serializer.data
             user.first_name = user_data["name"]
-            user.username = user_data["username"]
-            user.phone_number = user_data["phone"]
-            user.save()
-            response = {
-                'status': 'success',
-                'code': status.HTTP_200_OK,
-                'message': 'Profile info updated successfully',
-                'data': []
-            }
+            user_exist = User.objects.filter(username=user_data["username"])
+            if not user_exist:
+                user.username = user_data["username"]
+                user.phone_number = user_data["phone"]
+                user.save()
+                response = {
+                    'status': 'success',
+                    'code': status.HTTP_200_OK,
+                    'message': 'Profile info updated successfully',
+                    'data': []
+                }
+            else:
+                response = {
+                    'code': status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    'message': 'username exists'
+                }
             return Response(response)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -253,8 +261,14 @@ class ResetPasswordView(APIView):
                 response = {
                     'status': 'success',
                     'code': status.HTTP_200_OK,
-                    'message': 'email sent to reset password',
+                    'message': 'email sent to reset password, will expire after 5 min',
                     'data': []
+                }
+                return Response(response)
+            else:
+                response = {
+                    'status': 'error',
+                    'message': 'Please enter your email'
                 }
                 return Response(response)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -280,8 +294,34 @@ class NewPassView(APIView):
             else:
                 return Response({"error": "Passwords not match"})
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Unauthenticated!')
+            raise AuthenticationFailed('Token expired!')
     
+
+class GithubInfo(APIView):
+    def get(self, request):
+        token = request.COOKIES.get('gitsk')
+        endpoint = "https://api.github.com/user"
+        headers = {"Authorization": f"Bearer {token}"}
+        githubuser_data = requests.get(endpoint, headers=headers).json()
+        githubuser_id = githubuser_data["id"]
+        github_user = User.objects.filter(github_id=githubuser_id)
+        if not github_user:
+            username = githubuser_data["login"] + "_github"
+            user = User.objects.create_user(username=username, github_id=githubuser_id)
+            if not user.is_verified:
+                user.is_verified = True
+                user.save()
+        payload = {
+            'id': github_user.first().id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=90),
+            'iat': datetime.datetime.utcnow()
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+        response = Response()
+        response.set_cookie(key='jwt', value=token, httponly=True)
+        response.data = {'jwt': token}
+        return response  
+
 
 def permission_authontication_jwt(request):
     token = request.COOKIES.get('jwt')
@@ -292,6 +332,7 @@ def permission_authontication_jwt(request):
     except jwt.ExpiredSignatureError:
         raise AuthenticationFailed('Unauthenticated!')
     return payload
+
 
 
 
