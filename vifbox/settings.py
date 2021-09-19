@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'vifApp',
     'phonenumber_field',
-    'social_django',
 ]
 
 MIDDLEWARE = [

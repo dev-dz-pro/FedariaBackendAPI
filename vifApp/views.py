@@ -12,13 +12,13 @@ from django.urls import reverse
 from rest_framework import status
 from django.conf import settings
 import requests
+import random
 
 
 class RegisterView(APIView):
     def post(self, request):
         
-        email_name = request.data["email"].split("@")
-        username = email_name[0] + "_" +email_name[1].split(".")[0]
+        username = generate_username(request.data["first_name"])
         request.data["username"] = username
         
         serializer = UserSerializer(data=request.data)
@@ -85,15 +85,15 @@ class LoginView(APIView):
             raise AuthenticationFailed('Incorrect password!')
         payload = {
             'id': user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=90),
             'iat': datetime.datetime.utcnow()
         }
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
         response = Response()
-        if remember_me:
-            response.set_cookie(key='jwt', value=token, httponly=True)
+        if remember_me: 
+            payload['exp'] = datetime.datetime.utcnow() + datetime.timedelta(days=7)
         else:
-            response.set_cookie(key='jwt', value=token, httponly=True, expires=300)
+            payload['exp'] = datetime.datetime.utcnow() + datetime.timedelta(minutes=90)
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+        response.set_cookie(key='jwt', value=token, httponly=True)
         response.data = {'jwt': token}
         return response
 
@@ -306,7 +306,7 @@ class GithubInfo(APIView):
         githubuser_id = githubuser_data["id"]
         github_user = User.objects.filter(github_id=githubuser_id)
         if not github_user:
-            username = githubuser_data["login"] + "_github"
+            username = generate_username(githubuser_data["login"])
             user = User.objects.create_user(username=username, github_id=githubuser_id)
             if not user.is_verified:
                 user.is_verified = True
@@ -334,8 +334,8 @@ def permission_authontication_jwt(request):
     return payload
 
 
-
-
+def generate_username(name):
+    return name + str(random.randint(10000, 99999))
 
 
 
