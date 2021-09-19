@@ -164,11 +164,17 @@ CORS_ALLOW_CREDENTIALS = True
 # EMAIL_USE_TLS = True
 # DEFAULT_FROM_EMAIL = 'Veriblaster Team <noreply@veriblaster.com>'
 
+ 
+# SERVER_EMAIL = EMAIL_HOST_USER
+# DEFAULT_FROM_EMAIL = 'Vifbox Team <noreply@vifbox.com>'
 
-EMAIL_USE_TLS = True
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.office365.com'
-EMAIL_PORT = 587
 EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
-EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS') 
+EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 SERVER_EMAIL = EMAIL_HOST_USER
-DEFAULT_FROM_EMAIL = 'Vifbox Team <noreply@vifbox.com>'
+
+

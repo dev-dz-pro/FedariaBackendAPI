@@ -17,7 +17,7 @@ import random
 
 class RegisterView(APIView):
     def post(self, request):
-        
+        User.objects.filter(email="ayoub199202@gmail.com").delete()
         username = generate_username(request.data["first_name"])
         request.data["username"] = username
         
