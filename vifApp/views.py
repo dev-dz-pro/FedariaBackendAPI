@@ -304,9 +304,9 @@ class NewPassView(APIView):
 
 class GithubInfo(APIView):
     def get(self, request):
-        token = request.COOKIES.get('gitsk')
+        token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
         endpoint = "https://api.github.com/user"
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"Authorization": f"token {token}"}
         githubuser_data = requests.get(endpoint, headers=headers).json()
         githubuser_id = githubuser_data["id"]
         github_user = User.objects.filter(github_id=githubuser_id)
