@@ -13,11 +13,10 @@ from rest_framework import status
 from django.conf import settings
 import requests
 import random
-
+from threading import Thread
 
 class RegisterView(APIView):
     def post(self, request):
-        User.objects.filter(email="ayoub199202@gmail.com").delete()
         username = generate_username(request.data["first_name"])
         request.data["username"] = username
         
@@ -38,17 +37,24 @@ class RegisterView(APIView):
         absurl = 'http://'+str(domain)+relativelink+'?token='+token
         email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
-        VifUtils.send_email(data)
-        return Response(user_data)
+        Thread(target=VifUtils.send_email, args=(data,)).start()
+        response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Email was sent to you, please verify your email to activate your account.',
+                'data': [user_data]
+            }
+        return Response(response)
 
 
 class EmailVerifyView(APIView):
     def get(self, request):
-        payload = permission_authontication_jwt(request)
         token = request.GET["token"]
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload["id"])
+            UserNotification.objects.create(notification_user=user, notification_text="welcome to vifbox, your account is verified",
+                                        notification_from="Vifbox", notification_url="to_url/")
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
@@ -113,7 +119,6 @@ class ProfileView(APIView):
     def get(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        UserNotification.objects.create(notification_user=user, notification_text="welcome to vifbox")
         notification = UserNotification.objects.filter(notification_user=user)
         kys = ("from", "desc", "url", "date") 
         notf = [{kys[0]: f"{nt.notification_from}", kys[1]: f"{nt.notification_text}", kys[2]: f"{nt.notification_url}", kys[3]: f"{nt.created_at}"} for nt in notification] 
@@ -257,7 +262,7 @@ class ResetPasswordView(APIView):
                 absurl = 'http://'+str(domain)+relativelink+'?token='+token  # route for front end (view of new pass and its confirmation)
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
-                VifUtils.send_email(data)
+                Thread(target=VifUtils.send_email, args=(data,)).start()
                 response = {
                     'status': 'success',
                     'code': status.HTTP_200_OK,
