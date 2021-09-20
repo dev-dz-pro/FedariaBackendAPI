@@ -100,6 +100,8 @@ DATABASES = {
 #     }
 # }
 
+ALLOWED_HOSTS = ["a76b34aeac98a469298febb11353e5b5-311242608.eu-west-3.elb.amazonaws.com", "localhost", "127.0.0.1"]
+
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
@@ -178,3 +180,10 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 SERVER_EMAIL = EMAIL_HOST_USER
 
 
+# EMAIL_USE_TLS = True
+# EMAIL_HOST = 'smtp.office365.com'
+# EMAIL_PORT = 587
+# EMAIL_HOST_USER = 'aaaaa@company.com'
+# EMAIL_HOST_PASSWORD = 'pppppp'
+# SERVER_EMAIL = EMAIL_HOST_USER
+# DEFAULT_FROM_EMAIL = 'Vifbox Team <noreply@vifbox.com>'
