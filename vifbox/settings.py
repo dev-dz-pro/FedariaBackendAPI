@@ -26,8 +26,6 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1"]
-
 
 # Application definition
 
@@ -101,8 +99,7 @@ DATABASES = {
     }
 }
 
-ALLOWED_HOSTS = ["a76b34aeac98a469298febb11353e5b5-311242608.eu-west-3.elb.amazonaws.com", "localhost", "127.0.0.1"]
-
+ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1"]
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
