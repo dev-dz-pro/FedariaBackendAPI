@@ -42,7 +42,7 @@ class RegisterView(APIView):
                 'status': 'success',
                 'code': status.HTTP_200_OK,
                 'message': 'Email was sent to you, please verify your email to activate your account.',
-                'data': [user_data]
+                'info': user_data
             }
         return Response(response)
 
