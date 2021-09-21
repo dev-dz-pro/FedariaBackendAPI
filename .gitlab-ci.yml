@@ -14,7 +14,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - mkdir $HOME/.docker/
     - echo $DOCKER_AUTH_CONFIG > $HOME/.docker/config.json
   script:
-    - docker run --rm -it amazon/aws-cli --version
+    - docker run --rm -t amazon/aws-cli --version
     - docker build -t $IMAGE_TAG_LATEST -f Dockerfile .
     - docker push $IMAGE_TAG_LATEST
 #   rules:
