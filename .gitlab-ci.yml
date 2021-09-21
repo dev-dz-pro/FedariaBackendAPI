@@ -4,14 +4,14 @@ stages:          # List of stages for jobs, and their order of execution
   - build
   - test
   - deploy
-before_script:
-  - apt udpate && apt-get install awscli -y
+
 variables:
   IMAGE_TAG_LATEST: 854130342536.dkr.ecr.eu-west-3.amazonaws.com/vifbox:latest
 
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
   before_script:
+    - apt udpate && apt-get install awscli -y
     - mkdir $HOME/.docker/
     - echo $DOCKER_AUTH_CONFIG > $HOME/.docker/config.json
   script:
