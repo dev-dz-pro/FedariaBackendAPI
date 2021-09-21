@@ -40,7 +40,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'vifApp',
     'phonenumber_field',
-    'social_django',
 ]
 
 MIDDLEWARE = [
@@ -80,13 +79,6 @@ WSGI_APPLICATION = 'vifbox.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
 
 DATABASES = {
     'default': {
@@ -99,7 +91,9 @@ DATABASES = {
     }
 }
 
+
 ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1"]
+
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
@@ -118,12 +112,6 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
-
-# AUTHENTICATION_BACKENDS = (
-#     'social_core.backends.github.GithubOAuth2',
-#     'django.contrib.auth.backends.ModelBackend',
-# )
 
 
 # Internationalization
@@ -152,21 +140,6 @@ AUTH_USER_MODEL = 'vifApp.User'
 CORS_ORIGIN_ALLOW_ALL = True  # will change this to frontend react host and prevent others
 CORS_ALLOW_CREDENTIALS = True
 
-# LOGIN_REDIRECT_URL ='/api/home/'
-
-
-# set email configuration
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_HOST_USER = os.environ.get('gm_user') 
-# EMAIL_HOST_PASSWORD = os.environ.get('gm_pass')
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# DEFAULT_FROM_EMAIL = 'Veriblaster Team <noreply@veriblaster.com>'
-
- 
-# SERVER_EMAIL = EMAIL_HOST_USER
-# DEFAULT_FROM_EMAIL = 'Vifbox Team <noreply@vifbox.com>'
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.office365.com'
@@ -177,11 +150,3 @@ EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 SERVER_EMAIL = EMAIL_HOST_USER
 
-
-# EMAIL_USE_TLS = True
-# EMAIL_HOST = 'smtp.office365.com'
-# EMAIL_PORT = 587
-# EMAIL_HOST_USER = 'aaaaa@company.com'
-# EMAIL_HOST_PASSWORD = 'pppppp'
-# SERVER_EMAIL = EMAIL_HOST_USER
-# DEFAULT_FROM_EMAIL = 'Vifbox Team <noreply@vifbox.com>'

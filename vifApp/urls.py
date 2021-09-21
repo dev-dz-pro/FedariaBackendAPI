@@ -1,15 +1,16 @@
 from django.urls import path
-
-from .views import (RegisterView, LoginView, LogoutView, HomeView,
+from .views import (RegisterView, LoginView, HomeView,
                     SettingsView, ProfileView, EmailVerifyView, 
                     ResetPasswordView, NewPassView, ProfileInfoUpdate, 
-                    ProfileImageUpdate, SettingsInfoUpdate, GithubInfo)  # ChangePasswordView Gitcredit IndexView
+                    ProfileImageUpdate, SettingsInfoUpdate, GithubInfo, TokenRefreshView)
+
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name="register"),
     path('login/', LoginView.as_view(), name="login"),
-    path('logout/', LogoutView.as_view()),
     path('home/', HomeView.as_view()),
+
+    path('token/refresh/', TokenRefreshView.as_view()),
 
     path('profile/', ProfileView.as_view()),
     path('profile/set_info/', ProfileInfoUpdate.as_view()), 
