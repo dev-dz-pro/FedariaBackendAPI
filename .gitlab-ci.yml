@@ -19,8 +19,6 @@ build-job:       # This job runs in the build stage, which runs first.
   stage: build
   before_script:
     - amazon-linux-extras install docker
-    - aws --version
-    - docker --version
   script:
     - docker build -t $IMAGE_TAG_LATEST -f Dockerfile .
     - aws ecr get-login-password | docker login --username AWS --password-stdin $DOCKER_REGISTRY
