@@ -10,13 +10,12 @@ variables:
 
 build-job:       # This job runs in the build stage, which runs first.
   image: 
-    name: amazon/aws-cli
+    # name: amazon/aws-cli
+    name: pooriaghaedi/awscli-docker:latest
     entrypoint: [""]
   # services:
   #   - docker:dind
   stage: build
-  before_script:
-    - amazon-linux-extras install docker
   script:
     - docker build -t $IMAGE_TAG_LATEST -f Dockerfile .
     - aws ecr get-login-password | docker login --username AWS --password-stdin $DOCKER_REGISTRY
