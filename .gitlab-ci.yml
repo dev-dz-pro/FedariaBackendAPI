@@ -4,7 +4,8 @@ stages:          # List of stages for jobs, and their order of execution
   - build
   - test
   - deploy
-
+before_script:
+  - apt udpate && apt-get install awscli -y
 variables:
   IMAGE_TAG_LATEST: 854130342536.dkr.ecr.eu-west-3.amazonaws.com/vifbox:latest
 
