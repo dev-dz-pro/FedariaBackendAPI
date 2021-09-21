@@ -23,7 +23,7 @@ class LoginSerializer(serializers.Serializer):
     model = User
     email = serializers.CharField(required=True)
     password = serializers.CharField(required=True)
-    remember_me = serializers.BooleanField(required=True)
+
 
 
 class ChangePasswordSerializer(serializers.Serializer):
@@ -33,6 +33,7 @@ class ChangePasswordSerializer(serializers.Serializer):
     new_password1 = serializers.CharField(required=True)
 
 
+
 class UpdateProfileSerializer(serializers.Serializer):
     model = User
     name = serializers.CharField(required=True)
@@ -40,10 +41,12 @@ class UpdateProfileSerializer(serializers.Serializer):
     phone = serializers.CharField(required=True)
 
 
+
 class UpdateProfileImageSerializer(serializers.Serializer):
     model = User
     profile_img_url = serializers.CharField(required=True)
     profile_title = serializers.CharField(required=True)
+
 
 
 class ResetPasswordSerializer(serializers.Serializer):

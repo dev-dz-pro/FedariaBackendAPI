@@ -2,28 +2,28 @@ from django.http import response
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
-                            UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer)
 from .models import User, UserNotification
-import jwt, datetime
+import jwt
+import datetime
 from .utils import VifUtils
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from rest_framework import status
 from django.conf import settings
 import requests
-import random
 from threading import Thread
+from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
+                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer)
 
-class RegisterView(APIView):
+
+
+class RegisterView(APIView): 
     def post(self, request):
-        username = generate_username(request.data["first_name"])
+        username = VifUtils.generate_username(request.data["first_name"])
         request.data["username"] = username
-        
         serializer = UserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
         user_data = serializer.data
         user = User.objects.get(email=user_data["email"])
         payload = {
@@ -45,6 +45,7 @@ class RegisterView(APIView):
                 'info': user_data
             }
         return Response(response)
+
 
 
 class EmailVerifyView(APIView):
@@ -72,14 +73,12 @@ class EmailVerifyView(APIView):
 
 class LoginView(APIView):
     def post(self, request):
-
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         user_data = serializer.data
         email = user_data['email']
         password = user_data['password']
-        remember_me = user_data['remember_me']
 
         if str(email).__contains__("@"):
             user = User.objects.filter(email=email).first()
@@ -89,25 +88,46 @@ class LoginView(APIView):
             raise AuthenticationFailed('User not found!')
         if not user.check_password(password):
             raise AuthenticationFailed('Incorrect password!')
-        payload = {
+        payload_access = {
             'id': user.id,
-            'iat': datetime.datetime.utcnow()
+            'iat': datetime.datetime.utcnow(),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
         }
-        response = Response()
-        if remember_me: 
-            payload['exp'] = datetime.datetime.utcnow() + datetime.timedelta(days=7)
-        else:
-            payload['exp'] = datetime.datetime.utcnow() + datetime.timedelta(minutes=90)
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        response.set_cookie(key='jwt', value=token, httponly=True)
-        response.data = {'jwt': token}
-        return response
+        payload_refresh = {
+            'id': user.id,
+            'iat': datetime.datetime.utcnow(),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+        }
+        access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+        refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+        return Response({"access": access_token, "refresh": refresh_token})
+
+
+
+class TokenRefreshView(APIView):
+    def post(self, request):
+        refresh = request.data["refresh"]
+        if not refresh:
+            raise AuthenticationFailed('Please login!')
+        try:
+            payload = jwt.decode(refresh, settings.SECRET_KEY, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated!')
+        except jwt.DecodeError:
+            raise AuthenticationFailed('invalid refresh token, please login!')
+        payload_access = {
+            'id': payload["id"],
+            'iat': datetime.datetime.utcnow(),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+        }
+        access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+        return Response({"access": access_token})
 
 
 
 class HomeView(APIView):
     def get(self, request):
-        payload = permission_authontication_jwt(request) # print(reverse('social:begin', kwargs={'backend':'github'}))
+        payload = permission_authontication_jwt(request) # reverse('social:begin', kwargs={'backend':'github'})
         user = User.objects.filter(id=payload['id']).first()
         serializer = UserSerializer(user)
         return Response(serializer.data)
@@ -115,7 +135,6 @@ class HomeView(APIView):
 
 
 class ProfileView(APIView):
-
     def get(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -135,6 +154,7 @@ class ProfileView(APIView):
             }
         }
         return Response(response)
+
 
 
 class ProfileInfoUpdate(APIView):
@@ -163,6 +183,7 @@ class ProfileInfoUpdate(APIView):
                 }
             return Response(response)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class ProfileImageUpdate(APIView):
@@ -207,6 +228,7 @@ class SettingsView(APIView):
         return Response(response)
 
 
+
 class SettingsInfoUpdate(APIView):
     def post(self, request):
         payload = permission_authontication_jwt(request)
@@ -231,19 +253,6 @@ class SettingsInfoUpdate(APIView):
 
 
 
-class LogoutView(APIView):
-    def post(self, request):
-        response = Response()
-        response.delete_cookie('jwt')
-        response.data = {
-            'status': 'success',
-            'code': status.HTTP_200_OK,
-            'message': 'Logged out successfully',
-            'data': []
-        }
-        return response
-
-
 class ResetPasswordView(APIView):
     def post(self, request):
         payload = permission_authontication_jwt(request)
@@ -259,7 +268,7 @@ class ResetPasswordView(APIView):
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
                 domain = get_current_site(request)
                 relativelink = reverse("pass-email-verify")
-                absurl = 'http://'+str(domain)+relativelink+'?token='+token  # route for front end (view of new pass and its confirmation)
+                absurl = 'http://'+str(domain)+relativelink+'?token='+token 
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
                 Thread(target=VifUtils.send_email, args=(data,)).start()
@@ -277,6 +286,7 @@ class ResetPasswordView(APIView):
                 }
                 return Response(response)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class NewPassView(APIView):
@@ -300,7 +310,8 @@ class NewPassView(APIView):
                 return Response({"error": "Passwords not match"})
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Token expired!')
-    
+
+
 
 class GithubInfo(APIView):
     def get(self, request):
@@ -311,143 +322,40 @@ class GithubInfo(APIView):
         githubuser_id = githubuser_data["id"]
         github_user = User.objects.filter(github_id=githubuser_id)
         if not github_user:
-            username = generate_username(githubuser_data["login"])
+            username = VifUtils.generate_username(githubuser_data["login"])
             user = User.objects.create_user(username=username, github_id=githubuser_id)
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
-        payload = {
+        payload_access = {
             'id': github_user.first().id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=90),
-            'iat': datetime.datetime.utcnow()
+            'iat': datetime.datetime.utcnow(),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
         }
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        response = Response()
-        response.set_cookie(key='jwt', value=token, httponly=True)
-        response.data = {'jwt': token}
-        return response  
+        payload_refresh = {
+            'id': github_user.first().id,
+            'iat': datetime.datetime.utcnow(),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+        }
+        access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+        refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+        return Response({"access": access_token, "refresh": refresh_token})
+
 
 
 def permission_authontication_jwt(request):
-    token = request.COOKIES.get('jwt')
-    if not token:
-        raise AuthenticationFailed('Unauthenticated!')
     try:
+        token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except jwt.DecodeError:
+        raise AuthenticationFailed('Token Expired!')
     except jwt.ExpiredSignatureError:
         raise AuthenticationFailed('Unauthenticated!')
+    except KeyError:
+        raise AuthenticationFailed('Invalid AUTHORIZATION!')
     return payload
 
 
-def generate_username(name):
-    return name + str(random.randint(10000, 99999))
 
 
 
-
-
-
-
-# def permission_authontication_jwt_reset_pass(request):
-#     token = request.COOKIES.get('jwttoken')
-#     if not token:
-#         raise AuthenticationFailed('Unauthenticated!')
-#     try:
-#         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-#     except jwt.ExpiredSignatureError:
-#         raise AuthenticationFailed('Unauthenticated!')
-#     return payload
-
-
-# class NewPassView(APIView):
-# def get(self, request):
-#     token = request.GET["token"]
-#     try:
-#         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-#         user = User.objects.get(id=payload["id"])
-#         if not user.is_verified:
-#             user.is_verified = True
-#             user.save()
-#         response = {
-#                 'status': 'success',
-#                 'code': status.HTTP_200_OK,
-#                 'message': 'Email Verified for changing password',
-#                 'data': []
-#         }
-#         return Response(response)  # you should redirect to change password page if response is sucessfull
-#     except jwt.ExpiredSignatureError:
-#         raise AuthenticationFailed('Unauthenticated!')
-
-# class ResetPasswordView(APIView):
-#     def post(self, request):
-#         payload = permission_authontication_jwt(request)
-#         user = User.objects.filter(id=payload['id']).first()
-#         serializer = ResetPasswordSerializer(data=request.data)
-#         if serializer.is_valid():
-#             if request.data["email"] == user.email:
-#                 payload = {
-#                     'id': user.id,
-#                     'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
-#                     'iat': datetime.datetime.utcnow()
-#                 }
-#                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-#                 response = Response()
-#                 response.set_cookie(key='jwt-conf-pass', value=token, httponly=True)
-#                 response = {
-#                     'status': 'success',
-#                     'code': status.HTTP_200_OK
-#                 }
-#                 return Response(response)
-#             else:
-#                 return Response({"error": "email not match"})
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-# class NewPassView(APIView):
-#     def post(self, request):
-#         payload = permission_authontication_jwt(request)
-#         user = User.objects.filter(id=payload['id']).first()
-#         new_pass = request.data["new_pass"]
-#         confirm_pass = request.data["confirm_new_pass"]
-#         if new_pass == confirm_pass:
-#             user.set_password(confirm_pass)
-#             user.save()
-#             response = {
-#                     'status': 'success',
-#                     'code': status.HTTP_200_OK,
-#                     'message': 'Password updated'
-#             }
-#             return Response(response) 
-#         else:
-#             return Response({"error": "Passwords not match"})
-
-# class ChangePasswordView(APIView):
-#     def post(self, request):
-#         payload = permission_authontication_jwt(request)
-#         user = User.objects.filter(id=payload['id']).first()
-#         serializer = ChangePasswordSerializer(data=request.data)
-#         if serializer.is_valid():
-#             if not user.check_password(serializer.data.get("old_password")):
-#                 return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
-#             user.set_password(serializer.data.get("new_password"))
-#             user.save()
-#             response = {
-#                 'status': 'success',
-#                 'code': status.HTTP_200_OK,
-#                 'message': 'Password updated successfully',
-#                 'data': []
-#             }
-#             return Response(response)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-# class IndexView(APIView):
-#     def get(self, request):
-#         token = request.COOKIES.get('dotcom_user')
-#         print(token)
-#         return Response({})
-
-# class AUTHORIZE(APIView):
-#     def get(self, request):
-#         print(request.data)
-#         return Response({})
-   
