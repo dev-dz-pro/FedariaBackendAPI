@@ -1,4 +1,4 @@
-image: docker:dind
+# image: docker:dind
 
 stages:          # List of stages for jobs, and their order of execution
   - build
@@ -6,16 +6,24 @@ stages:          # List of stages for jobs, and their order of execution
   - deploy
 
 variables:
-  IMAGE_TAG_LATEST: 854130342536.dkr.ecr.eu-west-3.amazonaws.com/vifbox:latest
+  DOCKER_REGISTRY: 854130342536.dkr.ecr.eu-west-3.amazonaws.com
+  IMAGE_TAG_LATEST: $DOCKER_REGISTRY/vifbox:latest
+  AWS_DEFAULT_REGION: eu-west-3
 
 build-job:       # This job runs in the build stage, which runs first.
+  image: 
+    name: amazon/aws-cli
+    entrypoint: [""]
+  services:
+    - docker:dind
   stage: build
   before_script:
-    - mkdir $HOME/.docker/
-    - echo $DOCKER_AUTH_CONFIG > $HOME/.docker/config.json
+    - amazon-linux-extras install docker
+    - aws --version
+    - docker --version
   script:
-    - docker run --rm -t amazon/aws-cli --version
     - docker build -t $IMAGE_TAG_LATEST -f Dockerfile .
+    - aws ecr get-login-password | docker login --username AWS --password-stdin $DOCKER_REGISTRY
     - docker push $IMAGE_TAG_LATEST
 #   rules:
 #     - if: '$CI_COMMIT_MESSAGE =~ /composer/'
