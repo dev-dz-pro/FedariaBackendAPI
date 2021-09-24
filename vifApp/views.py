@@ -16,14 +16,16 @@ from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswor
                         UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer)
 
 
-
 class RegisterView(APIView): 
     def post(self, request):
         username = VifUtils.generate_username(request.data["first_name"])
         request.data["username"] = username
         serializer = UserSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        # serializer.is_valid(raise_exception=True)
+        if serializer.is_valid():
+            serializer.save()
+        else:
+            return Response({"error": list(serializer.errors.values())[0][0]})
         user_data = serializer.data
         user = User.objects.get(email=user_data["email"])
         payload = {
@@ -35,6 +37,7 @@ class RegisterView(APIView):
         domain = get_current_site(request)
         relativelink = reverse("email-verify")
         absurl = 'http://'+str(domain)+relativelink+'?token='+token
+        # absurl = "http://localhost:3000/new-password/?token="+token
         email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
@@ -54,18 +57,24 @@ class EmailVerifyView(APIView):
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload["id"])
-            UserNotification.objects.create(notification_user=user, notification_text="welcome to vifbox, your account is verified",
-                                        notification_from="Vifbox", notification_url="to_url/")
+            
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
-            response = {
-                'status': 'success',
-                'code': status.HTTP_200_OK,
-                'message': 'Email Successfuly activated',
-                'data': []
-            }
+                UserNotification.objects.create(notification_user=user, 
+                                                notification_text="welcome to vifbox, your account is verified",
+                                                notification_from="Vifbox", notification_url="to_url/")
+                response = {
+                    'status': 'success',
+                    'code': status.HTTP_200_OK,
+                    'message': 'Email Successfuly activated',
+                    'data': []
+                }
+            else:
+                response = {'message': 'Email already activated'}
             return Response(response)
+        except jwt.DecodeError:
+            raise AuthenticationFailed('Token Expired!')
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Token expired!')
 
@@ -74,7 +83,9 @@ class EmailVerifyView(APIView):
 class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        # serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response({"error": list(serializer.errors.values())[0][0]})
 
         user_data = serializer.data
         email = user_data['email']
@@ -85,9 +96,11 @@ class LoginView(APIView):
         else:
             user = User.objects.filter(username=email).first()
         if user is None:
-            raise AuthenticationFailed('User not found!')
+            # raise AuthenticationFailed('User not found!')
+            return Response({"error": "user not found"})
         if not user.check_password(password):
-            raise AuthenticationFailed('Incorrect password!')
+            # raise AuthenticationFailed('Incorrect password!')
+            return Response({"error": "incorrect password"})
         payload_access = {
             'id': user.id,
             'iat': datetime.datetime.utcnow(),
@@ -255,20 +268,24 @@ class SettingsInfoUpdate(APIView):
 
 class ResetPasswordView(APIView):
     def post(self, request):
-        payload = permission_authontication_jwt(request)
-        user = User.objects.filter(id=payload['id']).first()
+        # payload = permission_authontication_jwt(request)
+        # user = User.objects.filter(id=payload['id']).first()
+        eml = request.data["email"]
+        email_exist = User.objects.filter(email=eml)
         serializer = ResetPasswordSerializer(data=request.data)
         if serializer.is_valid():
-            if request.data["email"] == user.email:
+            if email_exist:
+                user = email_exist.first()
                 payload = {
                     'id': user.id,
                     'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
                     'iat': datetime.datetime.utcnow()
                 }
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-                domain = get_current_site(request)
-                relativelink = reverse("pass-email-verify")
-                absurl = 'http://'+str(domain)+relativelink+'?token='+token 
+                # domain = get_current_site(request)
+                # relativelink = reverse("pass-email-verify")
+                # absurl = 'http://'+str(domain)+relativelink+'?token='+token  # change the domain to frontend domain
+                absurl = "http://localhost:3000/new-password/?token="+token
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
                 Thread(target=VifUtils.send_email, args=(data,)).start()
@@ -280,12 +297,9 @@ class ResetPasswordView(APIView):
                 }
                 return Response(response)
             else:
-                response = {
-                    'status': 'error',
-                    'message': 'Please enter your email'
-                }
-                return Response(response)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Email not exists, Please enter your email or SignUP'})
+        # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": list(serializer.errors.values())[0][0]})
 
 
 
@@ -354,8 +368,4 @@ def permission_authontication_jwt(request):
     except KeyError:
         raise AuthenticationFailed('Invalid AUTHORIZATION!')
     return payload
-
-
-
-
 
