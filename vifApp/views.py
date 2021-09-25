@@ -12,7 +12,7 @@ from django.conf import settings
 import requests
 from threading import Thread
 from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
-                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer)
+                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer)
 
 
 class RegisterView(APIView): 
@@ -207,11 +207,12 @@ class ProfileView(APIView):
                 "profile_img_url": f"{user.profile_image}",
                 "email": f"{user.email}",
                 "phone_number": f"{user.phone_number}",
+                "company_email": f"{user.company_email}",
+                "company_name": f"{user.company_name}",
                 "notification": notf
             }
         }
         return Response(response)
-
 
 
 class ProfileInfoUpdate(APIView):
@@ -263,6 +264,33 @@ class ProfileImageUpdate(APIView):
             user_data = serializer.data
             user.profile_image = user_data["profile_img_url"]
             user.profile_title = user_data["profile_title"]
+            user.save()
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Profile image updated successfully',
+                'data': []
+            }
+            return Response(response)
+        else:
+            err = list(serializer.errors.items())
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+                }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class ProfileSetCompanyUpdate(APIView):
+    def put(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = CompanySerializer(data=request.data)
+        if serializer.is_valid():
+            user_data = serializer.data
+            user.company_email = user_data["company_email"]
+            user.company_name = user_data["company_name"]
             user.save()
             response = {
                 'status': 'success',

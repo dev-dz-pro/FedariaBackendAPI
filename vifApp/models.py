@@ -13,6 +13,8 @@ class User(AbstractUser):
     phone_number = PhoneNumberField(blank=True)
     profile_image = models.CharField(max_length=255)
     profile_title = models.CharField(max_length=255)
+    company_email = models.EmailField(blank=True)
+    company_name = models.CharField(max_length=255, blank=True)
 
 
 class UserNotification(models.Model):
