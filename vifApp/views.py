@@ -1,4 +1,3 @@
-from django.http import response
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
@@ -21,11 +20,11 @@ class RegisterView(APIView):
         username = VifUtils.generate_username(request.data["first_name"])
         request.data["username"] = username
         serializer = UserSerializer(data=request.data)
-        # serializer.is_valid(raise_exception=True)
         if serializer.is_valid():
             serializer.save()
         else:
-            return Response({"error": list(serializer.errors.values())[0][0]})
+            err = list(serializer.errors.items())
+            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
         user_data = serializer.data
         user = User.objects.get(email=user_data["email"])
         payload = {
@@ -76,16 +75,16 @@ class EmailVerifyView(APIView):
         except jwt.DecodeError:
             raise AuthenticationFailed('Token Expired!')
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Token expired!')
+            raise AuthenticationFailed('Unauthenticated!')
 
 
 
 class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        # serializer.is_valid(raise_exception=True)
         if not serializer.is_valid():
-            return Response({"error": list(serializer.errors.values())[0][0]})
+            err = list(serializer.errors.items())
+            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
 
         user_data = serializer.data
         email = user_data['email']
@@ -97,10 +96,10 @@ class LoginView(APIView):
             user = User.objects.filter(username=email).first()
         if user is None:
             # raise AuthenticationFailed('User not found!')
-            return Response({"error": "user not found"})
+            return Response({"error": "user not found"}, status.HTTP_400_BAD_REQUEST)
         if not user.check_password(password):
             # raise AuthenticationFailed('Incorrect password!')
-            return Response({"error": "incorrect password"})
+            return Response({"error": "incorrect password"}, status.HTTP_400_BAD_REQUEST)
         payload_access = {
             'id': user.id,
             'iat': datetime.datetime.utcnow(),
@@ -175,7 +174,7 @@ class ProfileInfoUpdate(APIView):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         serializer = UpdateProfileSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
+        if serializer.is_valid():
             user_data = serializer.data
             user.first_name = user_data["name"]
             user_exist = User.objects.filter(username=user_data["username"])
@@ -189,13 +188,13 @@ class ProfileInfoUpdate(APIView):
                     'message': 'Profile info updated successfully',
                     'data': []
                 }
+                return Response(response)
             else:
-                response = {
-                    'code': status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    'message': 'username exists'
-                }
-            return Response(response)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'username exists'}, status.HTTP_400_BAD_REQUEST)
+        else:
+            err = list(serializer.errors.items())
+            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+        # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -204,7 +203,7 @@ class ProfileImageUpdate(APIView):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         serializer = UpdateProfileImageSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
+        if serializer.is_valid():
             user_data = serializer.data
             user.profile_image = user_data["profile_img_url"]
             user.profile_title = user_data["profile_title"]
@@ -216,7 +215,9 @@ class ProfileImageUpdate(APIView):
                 'data': []
             }
             return Response(response)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            err = list(serializer.errors.items())
+            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -249,12 +250,12 @@ class SettingsInfoUpdate(APIView):
         serializer = ChangePasswordSerializer(data=request.data)
         if serializer.is_valid():
             if not user.check_password(serializer.data.get("old_password")):
-                return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Wrong password, please enter your old password correctly!"}, status=status.HTTP_400_BAD_REQUEST)
             if serializer.data.get("new_password") == serializer.data.get("new_password1"):
                 user.set_password(serializer.data.get("new_password"))
                 user.save()
             else:
-                return Response({"error": "password not match"})
+                return Response({"error": "passwords not match"}, status=status.HTTP_400_BAD_REQUEST)
             response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
@@ -262,14 +263,14 @@ class SettingsInfoUpdate(APIView):
                 'data': []
             }
             return Response(response)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            err = list(serializer.errors.items())
+            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
 
 
 
 class ResetPasswordView(APIView):
     def post(self, request):
-        # payload = permission_authontication_jwt(request)
-        # user = User.objects.filter(id=payload['id']).first()
         eml = request.data["email"]
         email_exist = User.objects.filter(email=eml)
         serializer = ResetPasswordSerializer(data=request.data)
@@ -297,9 +298,11 @@ class ResetPasswordView(APIView):
                 }
                 return Response(response)
             else:
-                return Response({'error': 'Email not exists, Please enter your email or SignUP'})
-        # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"error": list(serializer.errors.values())[0][0]})
+                return Response({'error': 'Email not exists, Please enter your email or SignUP'}, status.HTTP_400_BAD_REQUEST)
+        else:
+            err = list(serializer.errors.items())
+            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+        
 
 
 
@@ -321,7 +324,7 @@ class NewPassView(APIView):
                 }
                 return Response(response) 
             else:
-                return Response({"error": "Passwords not match"})
+                return Response({"error": "Passwords not match"}, status.HTTP_400_BAD_REQUEST)
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Token expired!')
 
