@@ -24,7 +24,12 @@ class RegisterView(APIView):
             serializer.save()
         else:
             err = list(serializer.errors.items())
-            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': '(' + err[0][0] + ') ' + err[0][1][0]
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
         user_data = serializer.data
         user = User.objects.get(email=user_data["email"])
         payload = {
@@ -73,9 +78,19 @@ class EmailVerifyView(APIView):
                 response = {'message': 'Email already activated'}
             return Response(response)
         except jwt.DecodeError:
-            raise AuthenticationFailed('Token Expired!')
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Token Expired!'
+            }
+            raise AuthenticationFailed(response)
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Unauthenticated!')
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Unauthenticated!'
+            }
+            raise AuthenticationFailed(response)
 
 
 
@@ -84,7 +99,12 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
             err = list(serializer.errors.items())
-            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': '(' + err[0][0] + ') ' + err[0][1][0]
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
 
         user_data = serializer.data
         email = user_data['email']
@@ -96,10 +116,20 @@ class LoginView(APIView):
             user = User.objects.filter(username=email).first()
         if user is None:
             # raise AuthenticationFailed('User not found!')
-            return Response({"error": "user not found"}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': "user not found!"
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
         if not user.check_password(password):
             # raise AuthenticationFailed('Incorrect password!')
-            return Response({"error": "incorrect password"}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': "incorrect password!"
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
         payload_access = {
             'id': user.id,
             'iat': datetime.datetime.utcnow(),
@@ -120,13 +150,28 @@ class TokenRefreshView(APIView):
     def post(self, request):
         refresh = request.data["refresh"]
         if not refresh:
-            raise AuthenticationFailed('Please login!')
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Please login!'
+            }
+            raise AuthenticationFailed(response)
         try:
             payload = jwt.decode(refresh, settings.SECRET_KEY, algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Unauthenticated!')
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Unauthenticated!'
+            }
+            raise AuthenticationFailed(response)
         except jwt.DecodeError:
-            raise AuthenticationFailed('invalid refresh token, please login!')
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'invalid refresh token, please login!'
+            }
+            raise AuthenticationFailed(response)
         payload_access = {
             'id': payload["id"],
             'iat': datetime.datetime.utcnow(),
@@ -170,7 +215,7 @@ class ProfileView(APIView):
 
 
 class ProfileInfoUpdate(APIView):
-    def post(self, request):
+    def put(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         serializer = UpdateProfileSerializer(data=request.data)
@@ -179,6 +224,7 @@ class ProfileInfoUpdate(APIView):
             user.first_name = user_data["name"]
             user_exist = User.objects.filter(username=user_data["username"])
             if not user_exist:
+                user.email = user_data["email"]
                 user.username = user_data["username"]
                 user.phone_number = user_data["phone"]
                 user.save()
@@ -190,16 +236,26 @@ class ProfileInfoUpdate(APIView):
                 }
                 return Response(response)
             else:
-                return Response({'error': 'username exists'}, status.HTTP_400_BAD_REQUEST)
+                response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': 'username exists'
+                }
+                return Response(response, status.HTTP_400_BAD_REQUEST)
         else:
             err = list(serializer.errors.items())
-            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+                }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
         # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
 class ProfileImageUpdate(APIView):
-    def post(self, request):
+    def put(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         serializer = UpdateProfileImageSerializer(data=request.data)
@@ -217,7 +273,12 @@ class ProfileImageUpdate(APIView):
             return Response(response)
         else:
             err = list(serializer.errors.items())
-            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+                }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -244,18 +305,28 @@ class SettingsView(APIView):
 
 
 class SettingsInfoUpdate(APIView):
-    def post(self, request):
+    def put(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         serializer = ChangePasswordSerializer(data=request.data)
         if serializer.is_valid():
             if not user.check_password(serializer.data.get("old_password")):
-                return Response({"error": "Wrong password, please enter your old password correctly!"}, status=status.HTTP_400_BAD_REQUEST)
+                response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': "Wrong password, please enter your old password correctly!"
+                }
+                return Response(response, status=status.HTTP_400_BAD_REQUEST)
             if serializer.data.get("new_password") == serializer.data.get("new_password1"):
                 user.set_password(serializer.data.get("new_password"))
                 user.save()
             else:
-                return Response({"error": "passwords not match"}, status=status.HTTP_400_BAD_REQUEST)
+                response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': "passwords not match"
+                }
+                return Response(response, status=status.HTTP_400_BAD_REQUEST)
             response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
@@ -265,7 +336,12 @@ class SettingsInfoUpdate(APIView):
             return Response(response)
         else:
             err = list(serializer.errors.items())
-            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -298,16 +374,26 @@ class ResetPasswordView(APIView):
                 }
                 return Response(response)
             else:
-                return Response({'error': 'Email not exists, Please enter your email or SignUP'}, status.HTTP_400_BAD_REQUEST)
+                response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': 'Email not exists, Please enter your email or SignUP'
+                }
+                return Response(response, status.HTTP_400_BAD_REQUEST)
         else:
             err = list(serializer.errors.items())
-            return Response({"error": '(' + err[0][0] + ') ' + err[0][1][0]}, status.HTTP_400_BAD_REQUEST)
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+                }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
         
 
 
 
 class NewPassView(APIView):
-    def post(self, request):
+    def put(self, request):
         token = request.GET["token"]
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
@@ -324,9 +410,19 @@ class NewPassView(APIView):
                 }
                 return Response(response) 
             else:
-                return Response({"error": "Passwords not match"}, status.HTTP_400_BAD_REQUEST)
+                response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': "Passwords not match"
+                }
+                return Response(response, status.HTTP_400_BAD_REQUEST)
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Token expired!')
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Token expired!'
+            }
+            raise AuthenticationFailed(response)
 
 
 
@@ -365,11 +461,26 @@ def permission_authontication_jwt(request):
         token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
     except jwt.DecodeError:
-        raise AuthenticationFailed('Token Expired!')
+        response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Token Expired!'
+            }
+        raise AuthenticationFailed(response)
     except jwt.ExpiredSignatureError:
-        raise AuthenticationFailed('Unauthenticated!')
+        response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Unauthenticated!'
+            }
+        raise AuthenticationFailed(response)
     except KeyError:
-        raise AuthenticationFailed('Invalid AUTHORIZATION!')
+        response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Invalid AUTHORIZATION!'
+            }
+        raise AuthenticationFailed(response)
     return payload
 
 

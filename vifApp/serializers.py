@@ -53,6 +53,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 class UpdateProfileSerializer(serializers.Serializer):
     model = User
     name = serializers.CharField(required=True)
+    email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
     username = serializers.CharField(required=True)
     phone = serializers.CharField(allow_blank=True)
 
