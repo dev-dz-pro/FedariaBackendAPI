@@ -42,6 +42,11 @@ class LoginSerializer(serializers.Serializer):
 
 
 
+class CompanySerializer(serializers.Serializer):
+    model = User
+    company_email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
+    company_name = serializers.CharField(required=True)
+
 class ChangePasswordSerializer(serializers.Serializer):
     model = User
     old_password = serializers.CharField(required=True)

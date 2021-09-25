@@ -12,7 +12,7 @@ from django.conf import settings
 import requests
 from threading import Thread
 from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
-                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer)
+                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer)
 
 
 class RegisterView(APIView): 
@@ -80,14 +80,14 @@ class EmailVerifyView(APIView):
         except jwt.DecodeError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token Expired!'
             }
             raise AuthenticationFailed(response)
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Unauthenticated!'
             }
             raise AuthenticationFailed(response)
@@ -152,7 +152,7 @@ class TokenRefreshView(APIView):
         if not refresh:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Please login!'
             }
             raise AuthenticationFailed(response)
@@ -161,14 +161,14 @@ class TokenRefreshView(APIView):
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Unauthenticated!'
             }
             raise AuthenticationFailed(response)
         except jwt.DecodeError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'invalid refresh token, please login!'
             }
             raise AuthenticationFailed(response)
@@ -207,11 +207,12 @@ class ProfileView(APIView):
                 "profile_img_url": f"{user.profile_image}",
                 "email": f"{user.email}",
                 "phone_number": f"{user.phone_number}",
+                "company_email": f"{user.company_email}",
+                "company_name": f"{user.company_name}",
                 "notification": notf
             }
         }
         return Response(response)
-
 
 
 class ProfileInfoUpdate(APIView):
@@ -263,6 +264,33 @@ class ProfileImageUpdate(APIView):
             user_data = serializer.data
             user.profile_image = user_data["profile_img_url"]
             user.profile_title = user_data["profile_title"]
+            user.save()
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Profile image updated successfully',
+                'data': []
+            }
+            return Response(response)
+        else:
+            err = list(serializer.errors.items())
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+                }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class ProfileSetCompanyUpdate(APIView):
+    def put(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = CompanySerializer(data=request.data)
+        if serializer.is_valid():
+            user_data = serializer.data
+            user.company_email = user_data["company_email"]
+            user.company_name = user_data["company_name"]
             user.save()
             response = {
                 'status': 'success',
@@ -419,7 +447,7 @@ class NewPassView(APIView):
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token expired!'
             }
             raise AuthenticationFailed(response)
@@ -463,21 +491,21 @@ def permission_authontication_jwt(request):
     except jwt.DecodeError:
         response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token Expired!'
             }
         raise AuthenticationFailed(response)
     except jwt.ExpiredSignatureError:
         response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Unauthenticated!'
             }
         raise AuthenticationFailed(response)
     except KeyError:
         response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Invalid AUTHORIZATION!'
             }
         raise AuthenticationFailed(response)

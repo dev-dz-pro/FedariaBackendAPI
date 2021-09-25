@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (RegisterView, LoginView, HomeView,
                     SettingsView, ProfileView, EmailVerifyView, 
                     ResetPasswordView, NewPassView, ProfileInfoUpdate, 
-                    ProfileImageUpdate, SettingsInfoUpdate, GithubInfo, TokenRefreshView)
+                    ProfileImageUpdate, SettingsInfoUpdate, GithubInfo, TokenRefreshView, ProfileSetCompanyUpdate)
 
 
 urlpatterns = [
@@ -15,6 +15,7 @@ urlpatterns = [
     path('profile/', ProfileView.as_view()),
     path('profile/set_info/', ProfileInfoUpdate.as_view()), 
     path('profile/set_img/', ProfileImageUpdate.as_view()),
+    path('profile/set_company/', ProfileSetCompanyUpdate.as_view()),
     
     path('settings/', SettingsView.as_view()),
     path('settings/set_info/', SettingsInfoUpdate.as_view()),
