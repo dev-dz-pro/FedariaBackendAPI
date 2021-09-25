@@ -362,7 +362,7 @@ class ResetPasswordView(APIView):
                 # domain = get_current_site(request)
                 # relativelink = reverse("pass-email-verify")
                 # absurl = 'http://'+str(domain)+relativelink+'?token='+token  # change the domain to frontend domain
-                absurl = "http://localhost:3000/new-password/?token="+token
+                absurl = "http://vifbox.org/new-password/?token="+token
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
                 Thread(target=VifUtils.send_email, args=(data,)).start()
