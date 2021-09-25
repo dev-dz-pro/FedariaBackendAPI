@@ -80,14 +80,14 @@ class EmailVerifyView(APIView):
         except jwt.DecodeError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token Expired!'
             }
             raise AuthenticationFailed(response)
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Unauthenticated!'
             }
             raise AuthenticationFailed(response)
@@ -152,7 +152,7 @@ class TokenRefreshView(APIView):
         if not refresh:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Please login!'
             }
             raise AuthenticationFailed(response)
@@ -161,14 +161,14 @@ class TokenRefreshView(APIView):
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Unauthenticated!'
             }
             raise AuthenticationFailed(response)
         except jwt.DecodeError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'invalid refresh token, please login!'
             }
             raise AuthenticationFailed(response)
@@ -419,7 +419,7 @@ class NewPassView(APIView):
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token expired!'
             }
             raise AuthenticationFailed(response)
@@ -463,21 +463,21 @@ def permission_authontication_jwt(request):
     except jwt.DecodeError:
         response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token Expired!'
             }
         raise AuthenticationFailed(response)
     except jwt.ExpiredSignatureError:
         response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Unauthenticated!'
             }
         raise AuthenticationFailed(response)
     except KeyError:
         response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
+                'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Invalid AUTHORIZATION!'
             }
         raise AuthenticationFailed(response)
