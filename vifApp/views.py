@@ -38,10 +38,10 @@ class RegisterView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        domain = get_current_site(request)
-        relativelink = reverse("email-verify")
-        absurl = 'http://'+str(domain)+relativelink+'?token='+token
-        # absurl = "http://localhost:3000/new-password/?token="+token
+        # domain = get_current_site(request)
+        # relativelink = reverse("email-verify")
+        # absurl = 'http://'+str(domain)+relativelink+'?token='+token
+        absurl = "http://vifbox.org/verify-email/?token="+token # will add it to var inv
         email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
@@ -392,9 +392,6 @@ class ResetPasswordView(APIView):
                     'iat': datetime.datetime.utcnow()
                 }
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-                # domain = get_current_site(request)
-                # relativelink = reverse("pass-email-verify")
-                # absurl = 'http://'+str(domain)+relativelink+'?token='+token  # change the domain to frontend domain
                 absurl = "http://vifbox.org/new-password/?token="+token
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
