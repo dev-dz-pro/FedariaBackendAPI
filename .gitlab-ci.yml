@@ -24,7 +24,7 @@ sonarqube-check:
     - sonar-scanner
   allow_failure: true
   only:
-    - main # or the name of your main branch
+    - staging # or the name of your main branch
 
 
 build-job:       # This job runs in the build stage, which runs first.
