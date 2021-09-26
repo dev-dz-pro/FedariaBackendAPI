@@ -8,7 +8,7 @@ import datetime
 
 class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
-    email = models.CharField(max_length=255, unique=True, blank=True, null=True)
+    email = models.CharField(max_length=255, blank=True, null=True) # , unique=True
     github_id = models.BigIntegerField(unique=True, blank=True, null=True)
     phone_number = PhoneNumberField(blank=True)
     profile_image = models.ImageField(default="default.jpg", upload_to="profile_pics")
