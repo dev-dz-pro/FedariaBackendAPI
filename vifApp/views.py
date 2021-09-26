@@ -207,7 +207,7 @@ class ProfileView(APIView):
                 "profile_img_url": user.profile_image.url,
                 "profile_title": user.profile_title,
                 "email": user.email,
-                "phone_number": user.phone_number,
+                "phone_number": str(user.phone_number),
                 "company_email": user.company_email,
                 "company_name": user.company_name,
                 "notification": notf
@@ -253,6 +253,7 @@ class ProfileInfoUpdate(APIView):
                     'message': '(' + err[0][0] + ') ' + err[0][1][0]
                 }
             return Response(response, status.HTTP_400_BAD_REQUEST)
+        # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -380,10 +381,10 @@ class SettingsInfoUpdate(APIView):
 
 class ResetPasswordView(APIView):
     def post(self, request):
-        eml = request.data["email"]
-        email_exist = User.objects.filter(email=eml)
         serializer = ResetPasswordSerializer(data=request.data)
         if serializer.is_valid():
+            eml = request.data["email"]
+            email_exist = User.objects.filter(email=eml)
             if email_exist:
                 user = email_exist.first()
                 payload = {
@@ -424,8 +425,8 @@ class ResetPasswordView(APIView):
 
 class NewPassView(APIView):
     def put(self, request):
-        token = request.GET["token"]
         try:
+            token = request.GET["token"]
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload["id"])
             new_pass = request.data["new_pass"]
@@ -462,7 +463,10 @@ class GithubInfo(APIView):
         endpoint = "https://api.github.com/user"
         headers = {"Authorization": f"token {token}"}
         githubuser_data = requests.get(endpoint, headers=headers).json()
-        githubuser_id = githubuser_data["id"]
+        try:
+            githubuser_id = githubuser_data["id"]
+        except KeyError:
+            return Response(githubuser_data, status.HTTP_400_BAD_REQUEST)
         github_user = User.objects.filter(github_id=githubuser_id)
         if not github_user:
             username = VifUtils.generate_username(githubuser_data["login"])
@@ -470,6 +474,9 @@ class GithubInfo(APIView):
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
+                UserNotification.objects.create(notification_user=user, 
+                                                notification_text="welcome to vifbox, your account is verified",
+                                                notification_from="Vifbox", notification_url="to_url/")
         payload_access = {
             'id': github_user.first().id,
             'iat': datetime.datetime.utcnow(),
@@ -512,5 +519,3 @@ def permission_authontication_jwt(request):
             }
         raise AuthenticationFailed(response)
     return payload
-
-
