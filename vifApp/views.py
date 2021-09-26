@@ -197,18 +197,19 @@ class ProfileView(APIView):
         user = User.objects.filter(id=payload['id']).first()
         notification = UserNotification.objects.filter(notification_user=user)
         kys = ("from", "desc", "url", "date") 
-        notf = [{kys[0]: f"{nt.notification_from}", kys[1]: f"{nt.notification_text}", kys[2]: f"{nt.notification_url}", kys[3]: f"{nt.created_at}"} for nt in notification] 
+        notf = [{kys[0]: nt.notification_from, kys[1]: nt.notification_text, kys[2]: nt.notification_url, kys[3]: nt.created_at} for nt in notification] 
         response = {
             'status': 'success',
             'code': status.HTTP_200_OK,
             'data': {
-                "name": f"{user.first_name}",
-                "username": f"{user.username}",
-                "profile_img_url": f"{user.profile_image}",
-                "email": f"{user.email}",
-                "phone_number": f"{user.phone_number}",
-                "company_email": f"{user.company_email}",
-                "company_name": f"{user.company_name}",
+                "name": user.first_name,
+                "username": user.username,
+                "profile_img_url": user.profile_image.url,
+                "profile_title": user.profile_title,
+                "email": user.email,
+                "phone_number": user.phone_number,
+                "company_email": user.company_email,
+                "company_name": user.company_name,
                 "notification": notf
             }
         }
@@ -222,9 +223,9 @@ class ProfileInfoUpdate(APIView):
         serializer = UpdateProfileSerializer(data=request.data)
         if serializer.is_valid():
             user_data = serializer.data
-            user.first_name = user_data["name"]
             user_exist = User.objects.filter(username=user_data["username"])
             if not user_exist:
+                user.first_name = user_data["name"]
                 user.email = user_data["email"]
                 user.username = user_data["username"]
                 user.phone_number = user_data["phone"]
@@ -261,15 +262,19 @@ class ProfileImageUpdate(APIView):
         user = User.objects.filter(id=payload['id']).first()
         serializer = UpdateProfileImageSerializer(data=request.data)
         if serializer.is_valid():
-            user_data = serializer.data
-            user.profile_image = user_data["profile_img_url"]
-            user.profile_title = user_data["profile_title"]
+            file = request.FILES['profile_img_url']
+            profile_title = request.data["profile_title"]
+            user.profile_image = file
+            user.profile_title = profile_title
             user.save()
             response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
-                'message': 'Profile image updated successfully',
-                'data': []
+                'message': 'Profile image and title updated successfully',
+                'data': {
+                    "profile_image": user.profile_image.url,
+                    "profile_title": user.profile_title
+                }
             }
             return Response(response)
         else:
@@ -307,7 +312,7 @@ class ProfileSetCompanyUpdate(APIView):
                     'message': '(' + err[0][0] + ') ' + err[0][1][0]
                 }
             return Response(response, status.HTTP_400_BAD_REQUEST)
-
+        
 
 
 class SettingsView(APIView):
@@ -316,15 +321,15 @@ class SettingsView(APIView):
         user = User.objects.filter(id=payload['id']).first()
         notification = UserNotification.objects.filter(notification_user=user)
         kys = ("from", "desc", "url", "date") 
-        notf = [{kys[0]: f"{nt.notification_from}", kys[1]: f"{nt.notification_text}", kys[2]: f"{nt.notification_url}", kys[3]: f"{nt.created_at}"} for nt in notification] 
+        notf = [{kys[0]: nt.notification_from, kys[1]: nt.notification_text, kys[2]: nt.notification_url, kys[3]: nt.created_at} for nt in notification] 
         response = {
             'status': 'success',
             'code': status.HTTP_200_OK,
             'data': {
-                "name": f"{user.first_name}",
-                "username": f"{user.username}",
-                "profile_img_url": f"{user.profile_image}",
-                "is_verified": f"{user.is_verified}",
+                "name": user.first_name,
+                "username": user.username,
+                "profile_img_url": user.profile_image.url,
+                "is_verified": user.is_verified,
                 "notification": notf
             }
         }

@@ -1,8 +1,7 @@
 from rest_framework import serializers
-from rest_framework.fields import Field
 from .models import User
 from rest_framework.exceptions import ValidationError
-
+from rest_framework import status
 
 class UserSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=True, min_length=2)
@@ -26,7 +25,12 @@ class UserSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         email_exists = User.objects.filter(email=validated_data["email"]).exists()
         if email_exists:
-            raise ValidationError({"error": 'Email already exists, please Signin!'})
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': 'Email already exists, please Signin!'
+            }
+            raise ValidationError(response)
         instance = self.Meta.model(**validated_data)
         if password is not None:
             instance.set_password(password)
@@ -66,8 +70,8 @@ class UpdateProfileSerializer(serializers.Serializer):
 
 class UpdateProfileImageSerializer(serializers.Serializer):
     model = User
-    profile_img_url = serializers.CharField(required=True)
-    profile_title = serializers.CharField(allow_blank=True)
+    profile_img_url = serializers.FileField(max_length=None, allow_empty_file=False)
+    profile_title = serializers.CharField(allow_blank=True, allow_null=True)
 
 
 

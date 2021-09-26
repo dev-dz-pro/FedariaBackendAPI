@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (RegisterView, LoginView, HomeView,
                     SettingsView, ProfileView, EmailVerifyView, 
-                    ResetPasswordView, NewPassView, ProfileInfoUpdate, 
+                    ResetPasswordView, NewPassView, ProfileInfoUpdate,
                     ProfileImageUpdate, SettingsInfoUpdate, GithubInfo, TokenRefreshView, ProfileSetCompanyUpdate)
 
 
@@ -26,4 +26,5 @@ urlpatterns = [
     path('password/reset/confirm/', NewPassView.as_view(), name="pass-email-verify"),
 
     path('github-auth/', GithubInfo.as_view(), name="github-info"),
-]
+] 
+
