@@ -40,7 +40,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'vifApp',
     'phonenumber_field',
-    'storages'
+    # 'storages'
 ]
 
 MIDDLEWARE = [
