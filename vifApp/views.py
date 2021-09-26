@@ -184,13 +184,6 @@ class TokenRefreshView(APIView):
 
 class HomeView(APIView):
     def get(self, request):
-        # from botocore.client import Config
-        # import boto3
-        # file = request.FILES['profile_img_url']
-        # client = boto3.client('s3',config=Config(signature_version='s3v4'),aws_access_key_id="AKIA4NXRCXKEC3MAIO5W", aws_secret_access_key="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")
-        # client.upload_fileobj(file, "vifbox-backend", "filename.jpg")
-        # url = client.generate_presigned_url('get_object', Params = {'Bucket': "vifbox-backend" , 'Key': "/"})
-        # return Response({"url": url})
         payload = permission_authontication_jwt(request) # reverse('social:begin', kwargs={'backend':'github'})
         user = User.objects.filter(id=payload['id']).first()
         serializer = UserSerializer(user)
