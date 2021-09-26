@@ -38,10 +38,10 @@ class RegisterView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        domain = get_current_site(request)
-        relativelink = reverse("email-verify")
-        absurl = 'http://'+str(domain)+relativelink+'?token='+token
-        # absurl = "http://localhost:3000/new-password/?token="+token
+        # domain = get_current_site(request)
+        # relativelink = reverse("email-verify")
+        # absurl = 'http://'+str(domain)+relativelink+'?token='+token
+        absurl = "http://vifbox.org/verify-email/?token="+token # will add it to var inv
         email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
@@ -184,6 +184,13 @@ class TokenRefreshView(APIView):
 
 class HomeView(APIView):
     def get(self, request):
+        # from botocore.client import Config
+        # import boto3
+        # file = request.FILES['profile_img_url']
+        # client = boto3.client('s3',config=Config(signature_version='s3v4'),aws_access_key_id="AKIA4NXRCXKEC3MAIO5W", aws_secret_access_key="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")
+        # client.upload_fileobj(file, "vifbox-backend", "filename.jpg")
+        # url = client.generate_presigned_url('get_object', Params = {'Bucket': "vifbox-backend" , 'Key': "/"})
+        # return Response({"url": url})
         payload = permission_authontication_jwt(request) # reverse('social:begin', kwargs={'backend':'github'})
         user = User.objects.filter(id=payload['id']).first()
         serializer = UserSerializer(user)
@@ -392,9 +399,6 @@ class ResetPasswordView(APIView):
                     'iat': datetime.datetime.utcnow()
                 }
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-                # domain = get_current_site(request)
-                # relativelink = reverse("pass-email-verify")
-                # absurl = 'http://'+str(domain)+relativelink+'?token='+token  # change the domain to frontend domain
                 absurl = "http://vifbox.org/new-password/?token="+token
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
