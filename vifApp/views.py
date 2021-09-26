@@ -224,7 +224,8 @@ class ProfileInfoUpdate(APIView):
         if serializer.is_valid():
             user_data = serializer.data
             user_exist = User.objects.filter(username=user_data["username"])
-            if not user_exist:
+            eml_exist = User.objects.filter(email=user_data["email"])
+            if not user_exist and not eml_exist:
                 user.first_name = user_data["name"]
                 user.email = user_data["email"]
                 user.username = user_data["username"]
@@ -241,7 +242,7 @@ class ProfileInfoUpdate(APIView):
                 response = {
                     'status': 'error',
                     'code': status.HTTP_400_BAD_REQUEST,
-                    'message': 'username exists'
+                    'message': 'username or email already exists!'
                 }
                 return Response(response, status.HTTP_400_BAD_REQUEST)
         else:
@@ -252,7 +253,6 @@ class ProfileInfoUpdate(APIView):
                     'message': '(' + err[0][0] + ') ' + err[0][1][0]
                 }
             return Response(response, status.HTTP_400_BAD_REQUEST)
-        # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
