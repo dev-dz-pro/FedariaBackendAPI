@@ -424,7 +424,7 @@ class ResetPasswordView(APIView):
 
 
 class NewPassView(APIView):
-    def put(self, request):
+    def post(self, request):
         try:
             token = request.GET["token"]
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
