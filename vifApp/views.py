@@ -245,10 +245,8 @@ class ProfileInfoUpdate(APIView):
         if serializer.is_valid():
             user_data = serializer.data
             user_exist = User.objects.filter(username=user_data["username"])
-            eml_exist = User.objects.filter(email=user_data["email"])
-            if not user_exist and not eml_exist:
+            if not user_exist:
                 user.first_name = user_data["name"]
-                user.email = user_data["email"]
                 user.username = user_data["username"]
                 user.phone_number = user_data["phone"]
                 user.save()
@@ -274,7 +272,6 @@ class ProfileInfoUpdate(APIView):
                     'message': '(' + err[0][0] + ') ' + err[0][1][0]
                 }
             return Response(response, status.HTTP_400_BAD_REQUEST)
-        # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
