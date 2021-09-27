@@ -54,6 +54,27 @@ class RegisterView(APIView):
         return Response(response)
 
 
+class EmailVerifyResendView(APIView):
+    def get(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
+            'iat': datetime.datetime.utcnow()
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+        absurl = "http://vifbox.org/verify-email/?token="+token 
+        email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
+        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
+        Thread(target=VifUtils.send_email, args=(data,)).start()
+        response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Email was sent to you, please verify your email to activate your account.'
+            }
+        return Response(response)
+        
 
 class EmailVerifyView(APIView):
     def get(self, request):
