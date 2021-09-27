@@ -360,7 +360,7 @@ class SettingsView(APIView):
 
 
 class SettingsInfoUpdate(APIView):
-    def put(self, request):
+    def post(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         serializer = ChangePasswordSerializer(data=request.data)
