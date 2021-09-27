@@ -250,27 +250,20 @@ class ProfileInfoUpdate(APIView):
                 user.username = user_data["username"]
                 user.phone_number = user_data["phone"]
                 user.save()
-                response = {
-                    'status': 'success',
-                    'code': status.HTTP_200_OK,
-                    'message': 'Profile info updated successfully',
-                    'data': []
-                }
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Profile info updated successfully'}
+                return Response(response)
+            elif user.username == user_exist.first().username:
+                user.first_name = user_data["name"]
+                user.phone_number = user_data["phone"]
+                user.save()
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Profile info updated successfully'}
                 return Response(response)
             else:
-                response = {
-                    'status': 'error',
-                    'code': status.HTTP_400_BAD_REQUEST,
-                    'message': 'username or email already exists!'
-                }
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'username or email already exists!'}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
         else:
             err = list(serializer.errors.items())
-            response = {
-                    'status': 'error',
-                    'code': status.HTTP_400_BAD_REQUEST,
-                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
-                }
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': '(' + err[0][0] + ') ' + err[0][1][0]}
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
 
