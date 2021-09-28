@@ -26,6 +26,14 @@ sonarqube-check:
   only:
     - staging # or the name of your main branch
 
+pylint:
+  stage: test
+  image: 
+    name: pooriaghaedi/aws:latest
+    entrypoint: [""]
+  script:
+  - pip3 install pylint 
+  - pylint -d C0301 ./*.py
 
 build-job:       # This job runs in the build stage, which runs first.
   image: 
