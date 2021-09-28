@@ -26,34 +26,18 @@ sonarqube-check:
   only:
     - staging # or the name of your main branch
 
-# pylint:
-#   stage: test
-#   image: 
-#     name: pooriaghaedi/aws:latest
-#     entrypoint: [""]
-#   script:
-#   - pip3 install pylint 
-#   - pylint -d C0301 vifApp/*.py
-#   only: 
-#     - staging
-
 pylint:
   stage: test
+  allow_failure: true
   image: 
     name: pooriaghaedi/aws:latest
     entrypoint: [""]
-  allow_failure: false
-  before_script:
-    - pip3 install pylint pylint-exit anybadge
   script:
-    - mkdir ./pylint
-    - pylint --output-format=text . | tee ./pylint/pylint.log || pylint-exit $?
-    - PYLINT_SCORE=$(sed -n 's/^Your code has been rated at \([-0-9.]*\)\/.*/\1/p' ./pylint/pylint.log)
-    - anybadge --label=Pylint --file=pylint/pylint.svg --value=$PYLINT_SCORE 2=red 4=orange 8=yellow 10=green
-    - echo "Pylint score is $PYLINT_SCORE"
-  artifacts:
-    paths:
-      - ./pylint/
+  - pip3 install pylint 
+  - pylint -d C0301 vifApp/*.py
+  only: 
+    - staging
+
 
 build-job:       # This job runs in the build stage, which runs first.
   image: 
