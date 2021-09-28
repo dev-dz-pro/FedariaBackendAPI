@@ -39,9 +39,9 @@ sonarqube-check:
 
 pylint:
   stage: test
-  # image: 
-  #   name: pooriaghaedi/aws:latest
-  #   entrypoint: [""]
+  image: 
+    name: pooriaghaedi/aws:latest
+    entrypoint: [""]
   allow_failure: false
   before_script:
     - pip3 install pylint pylint-exit anybadge
