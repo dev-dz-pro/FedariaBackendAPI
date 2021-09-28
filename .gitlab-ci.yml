@@ -44,7 +44,7 @@ pylint:
   #   entrypoint: [""]
   allow_failure: false
   before_script:
-    - pip install pylint pylint-exit anybadge
+    - pip3 install pylint pylint-exit anybadge
   script:
     - mkdir ./pylint
     - pylint --output-format=text . | tee ./pylint/pylint.log || pylint-exit $?
