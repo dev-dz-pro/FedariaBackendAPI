@@ -33,7 +33,9 @@ pylint:
     entrypoint: [""]
   script:
   - pip3 install pylint 
-  - pylint -d C0301 ./*.py
+  - pylint -d C0301 vifApp/*.py
+  only: 
+    - staging
 
 build-job:       # This job runs in the build stage, which runs first.
   image: 
