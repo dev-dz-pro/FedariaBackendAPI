@@ -15,6 +15,8 @@ from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswor
                         UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer)
 
 
+UNAUTHONTICATED = 'Unauthenticated!'
+
 class RegisterView(APIView): 
     def post(self, request):
         username = VifUtils.generate_username(request.data["first_name"])
@@ -38,18 +40,38 @@ class RegisterView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        # domain = get_current_site(request)
-        # relativelink = reverse("email-verify")
-        # absurl = 'http://'+str(domain)+relativelink+'?token='+token
         absurl = "http://vifbox.org/verify-email/?token="+token # will add it to var inv
-        email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
-        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
+        email_body = 'Hi '+ user.first_name + ', Click the link below to verify your email\n' + absurl
+        data = {'email_body': email_body, 'email_subject': 'Vifbox account activation', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
                 'message': 'Email was sent to you, please verify your email to activate your account.',
                 'info': user_data
+            }
+        return Response(response)
+
+
+
+class EmailVerifyResendView(APIView):
+    def get(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
+            'iat': datetime.datetime.utcnow()
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+        absurl = "http://vifbox.org/verify-email/?token="+token 
+        email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
+        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
+        Thread(target=VifUtils.send_email, args=(data,)).start()
+        response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Email was sent to you, please verify your email to activate your account.'
             }
         return Response(response)
 
@@ -88,7 +110,7 @@ class EmailVerifyView(APIView):
             response = {
                 'status': 'error',
                 'code': status.HTTP_403_FORBIDDEN,
-                'message': 'Unauthenticated!'
+                'message': UNAUTHONTICATED
             }
             raise AuthenticationFailed(response)
 
@@ -115,7 +137,6 @@ class LoginView(APIView):
         else:
             user = User.objects.filter(username=email).first()
         if user is None:
-            # raise AuthenticationFailed('User not found!')
             response = {
                 'status': 'error',
                 'code': status.HTTP_400_BAD_REQUEST,
@@ -123,7 +144,6 @@ class LoginView(APIView):
             }
             return Response(response, status.HTTP_400_BAD_REQUEST)
         if not user.check_password(password):
-            # raise AuthenticationFailed('Incorrect password!')
             response = {
                 'status': 'error',
                 'code': status.HTTP_400_BAD_REQUEST,
@@ -162,7 +182,7 @@ class TokenRefreshView(APIView):
             response = {
                 'status': 'error',
                 'code': status.HTTP_403_FORBIDDEN,
-                'message': 'Unauthenticated!'
+                'message': UNAUTHONTICATED
             }
             raise AuthenticationFailed(response)
         except jwt.DecodeError:
@@ -207,7 +227,7 @@ class ProfileView(APIView):
                 "profile_img_url": user.profile_image.url,
                 "profile_title": user.profile_title,
                 "email": user.email,
-                "phone_number": user.phone_number,
+                "phone_number": str(user.phone_number),
                 "company_email": user.company_email,
                 "company_name": user.company_name,
                 "notification": notf
@@ -226,33 +246,24 @@ class ProfileInfoUpdate(APIView):
             user_exist = User.objects.filter(username=user_data["username"])
             if not user_exist:
                 user.first_name = user_data["name"]
-                user.email = user_data["email"]
                 user.username = user_data["username"]
                 user.phone_number = user_data["phone"]
                 user.save()
-                response = {
-                    'status': 'success',
-                    'code': status.HTTP_200_OK,
-                    'message': 'Profile info updated successfully',
-                    'data': []
-                }
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Profile info updated successfully'}
+                return Response(response)
+            elif user.username == user_exist.first().username:
+                user.first_name = user_data["name"]
+                user.phone_number = user_data["phone"]
+                user.save()
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Profile info updated successfully'}
                 return Response(response)
             else:
-                response = {
-                    'status': 'error',
-                    'code': status.HTTP_400_BAD_REQUEST,
-                    'message': 'username exists'
-                }
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'username or email already exists!'}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
         else:
             err = list(serializer.errors.items())
-            response = {
-                    'status': 'error',
-                    'code': status.HTTP_400_BAD_REQUEST,
-                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
-                }
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': '(' + err[0][0] + ') ' + err[0][1][0]}
             return Response(response, status.HTTP_400_BAD_REQUEST)
-        # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -380,10 +391,10 @@ class SettingsInfoUpdate(APIView):
 
 class ResetPasswordView(APIView):
     def post(self, request):
-        eml = request.data["email"]
-        email_exist = User.objects.filter(email=eml)
         serializer = ResetPasswordSerializer(data=request.data)
         if serializer.is_valid():
+            eml = request.data["email"]
+            email_exist = User.objects.filter(email=eml)
             if email_exist:
                 user = email_exist.first()
                 payload = {
@@ -424,8 +435,8 @@ class ResetPasswordView(APIView):
 
 class NewPassView(APIView):
     def put(self, request):
-        token = request.GET["token"]
         try:
+            token = request.GET["token"]
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload["id"])
             new_pass = request.data["new_pass"]
@@ -462,7 +473,10 @@ class GithubInfo(APIView):
         endpoint = "https://api.github.com/user"
         headers = {"Authorization": f"token {token}"}
         githubuser_data = requests.get(endpoint, headers=headers).json()
-        githubuser_id = githubuser_data["id"]
+        try:
+            githubuser_id = githubuser_data["id"]
+        except KeyError:
+            return Response(githubuser_data, status.HTTP_400_BAD_REQUEST)
         github_user = User.objects.filter(github_id=githubuser_id)
         if not github_user:
             username = VifUtils.generate_username(githubuser_data["login"])
@@ -470,6 +484,9 @@ class GithubInfo(APIView):
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
+                UserNotification.objects.create(notification_user=user, 
+                                                notification_text="welcome to vifbox",
+                                                notification_from="Vifbox", notification_url="to_url/")
         payload_access = {
             'id': github_user.first().id,
             'iat': datetime.datetime.utcnow(),
@@ -501,7 +518,7 @@ def permission_authontication_jwt(request):
         response = {
                 'status': 'error',
                 'code': status.HTTP_403_FORBIDDEN,
-                'message': 'Unauthenticated!'
+                'message': UNAUTHONTICATED
             }
         raise AuthenticationFailed(response)
     except KeyError:
