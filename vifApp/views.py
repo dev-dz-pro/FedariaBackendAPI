@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
 from .models import User, UserNotification
 import jwt
+import os
 import datetime
 from .utils import VifUtils
 from rest_framework import status
@@ -14,9 +15,8 @@ from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswor
 
 
 UNAUTHONTICATED = 'Unauthenticated!'
-EMAIL_VERIFICATION_ROUTE= "http://vifbox.org/verify-email/?token="
 EMAIL_VERIFICATION_MESSAGE = 'Email was sent to you, please verify your email to activate your account.'
-EMAIL_SUBJECT = 'Verify your email'
+
 
 class RegisterView(APIView): 
     def post(self, request):
@@ -41,7 +41,7 @@ class RegisterView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        absurl = EMAIL_VERIFICATION_ROUTE + token # will add it to var inv
+        absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token # will add it to var inv
         email_body = 'Hi '+ user.first_name + ', Click the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Vifbox account activation', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
@@ -52,30 +52,9 @@ class RegisterView(APIView):
                 'info': user_data
             }
         return Response(response)
-
-
-class EmailVerifyResendView(APIView):
-    def get(self, request):
-        payload = permission_authontication_jwt(request)
-        user = User.objects.filter(id=payload['id']).first()
-        payload = {
-            'id': user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
-            'iat': datetime.datetime.utcnow()
-        }
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        absurl = EMAIL_VERIFICATION_ROUTE + token 
-        email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
-        data = {'email_body': email_body, 'email_subject': EMAIL_SUBJECT, "to_email": user.email}
-        Thread(target=VifUtils.send_email, args=(data,)).start()
-        response = {
-                'status': 'success',
-                'code': status.HTTP_200_OK,
-                'message': EMAIL_VERIFICATION_MESSAGE
-            }
-        return Response(response)
         
 
+
 class EmailVerifyResendView(APIView):
     def get(self, request):
         payload = permission_authontication_jwt(request)
@@ -86,9 +65,9 @@ class EmailVerifyResendView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        absurl = EMAIL_VERIFICATION_ROUTE + token 
+        absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token 
         email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
-        data = {'email_body': email_body, 'email_subject': EMAIL_SUBJECT, "to_email": user.email}
+        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
                 'status': 'success',
@@ -425,9 +404,9 @@ class ResetPasswordView(APIView):
                     'iat': datetime.datetime.utcnow()
                 }
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-                absurl = "http://vifbox.org/new-password/?token="+token
+                absurl = os.environ.get("front_domain") + "/new-password/?token=" + token
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
-                data = {'email_body': email_body, 'email_subject': EMAIL_SUBJECT, "to_email": user.email}
+                data = {'email_body': email_body, 'email_subject': 'Vifbox Reset password', "to_email": user.email}
                 Thread(target=VifUtils.send_email, args=(data,)).start()
                 response = {
                     'status': 'success',
