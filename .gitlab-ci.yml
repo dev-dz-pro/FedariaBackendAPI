@@ -1,26 +1,68 @@
-image: docker:dind
-
 stages:          # List of stages for jobs, and their order of execution
   - build
   - test
   - deploy
 
 variables:
-  IMAGE_TAG_LATEST: 854130342536.dkr.ecr.eu-west-3.amazonaws.com/vifbox:latest
+  DOCKER_REGISTRY: 854130342536.dkr.ecr.eu-west-3.amazonaws.com
+  IMAGE_TAG_LATEST: $DOCKER_REGISTRY/vifbox:latest
+  AWS_DEFAULT_REGION: eu-west-3
+
+sonarqube-check:
+  image: 
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  # stage: test
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  script: 
+    - sonar-scanner
+  allow_failure: true
+  only:
+    - staging # or the name of your main branch
+
+pylint:
+  stage: test
+  allow_failure: true
+  image: 
+    name: pooriaghaedi/aws:latest
+    entrypoint: [""]
+  script:
+  - pip3 install pylint 
+  - pylint -d C0301 vifApp/*.py
+  only: 
+    - staging
+
 
 build-job:       # This job runs in the build stage, which runs first.
+  image: 
+    # name: amazon/aws-cli
+    name: pooriaghaedi/awscli-docker:latest
+    entrypoint: [""]
+  # services:
+  #   - docker:dind
   stage: build
-  before_script:
-    - mkdir $HOME/.docker/
-    - echo $DOCKER_AUTH_CONFIG > $HOME/.docker/config.json
   script:
-    # - docker pull $IMAGE_TAG_LATEST || true
     - docker build -t $IMAGE_TAG_LATEST -f Dockerfile .
+    - aws ecr get-login-password | docker login --username AWS --password-stdin $DOCKER_REGISTRY
     - docker push $IMAGE_TAG_LATEST
-#   rules:
-#     - if: '$CI_COMMIT_MESSAGE =~ /composer/'
-#       when: never
-#     - when: always
+  only:
+    - staging
+deploy:
+  image: 
+    name: pooriaghaedi/aws:latest
+    entrypoint: [""]
+  stage: deploy
+  script:
+    - aws eks --region eu-west-3 update-kubeconfig --name Vifbox-EKS
+    - kubectl rollout  restart deployment/python-web -n python-web
+  only:
+    - staging
 
 # unit-test-job:   # This job runs in the test stage.
 #   stage: test    # It only starts when the job in the build stage completes successfully.
