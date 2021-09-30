@@ -18,7 +18,7 @@ class UserSerializer(serializers.ModelSerializer):
         psw = data.get('password')
         has_upper = any(n.isupper() for n in psw)
         if not has_upper:
-            raise ValidationError({"password": "should have at least 1 Uppercase Charecter."})
+            raise ValidationError({"pswrd": "should have at least 1 Uppercase Charecter."})
         return data
         
     def create(self, validated_data):
