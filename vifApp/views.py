@@ -5,8 +5,6 @@ from .models import User, UserNotification
 import jwt
 import datetime
 from .utils import VifUtils
-from django.contrib.sites.shortcuts import get_current_site
-from django.urls import reverse
 from rest_framework import status
 from django.conf import settings
 import requests
@@ -16,6 +14,9 @@ from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswor
 
 
 UNAUTHONTICATED = 'Unauthenticated!'
+EMAIL_VERIFICATION_ROUTE= "http://vifbox.org/verify-email/?token="
+EMAIL_VERIFICATION_MESSAGE = 'Email was sent to you, please verify your email to activate your account.'
+EMAIL_SUBJECT = 'Verify your email'
 
 class RegisterView(APIView): 
     def post(self, request):
@@ -40,14 +41,14 @@ class RegisterView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        absurl = "http://vifbox.org/verify-email/?token="+token # will add it to var inv
+        absurl = EMAIL_VERIFICATION_ROUTE + token # will add it to var inv
         email_body = 'Hi '+ user.first_name + ', Click the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Vifbox account activation', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
-                'message': 'Email was sent to you, please verify your email to activate your account.',
+                'message': EMAIL_VERIFICATION_MESSAGE,
                 'info': user_data
             }
         return Response(response)
@@ -63,14 +64,14 @@ class EmailVerifyResendView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        absurl = "http://vifbox.org/verify-email/?token="+token 
+        absurl = EMAIL_VERIFICATION_ROUTE + token 
         email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
-        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
+        data = {'email_body': email_body, 'email_subject': EMAIL_SUBJECT, "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
-                'message': 'Email was sent to you, please verify your email to activate your account.'
+                'message': EMAIL_VERIFICATION_MESSAGE
             }
         return Response(response)
         
@@ -85,14 +86,14 @@ class EmailVerifyResendView(APIView):
             'iat': datetime.datetime.utcnow()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        absurl = "http://vifbox.org/verify-email/?token="+token 
+        absurl = EMAIL_VERIFICATION_ROUTE + token 
         email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
-        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
+        data = {'email_body': email_body, 'email_subject': EMAIL_SUBJECT, "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
                 'status': 'success',
                 'code': status.HTTP_200_OK,
-                'message': 'Email was sent to you, please verify your email to activate your account.'
+                'message': EMAIL_VERIFICATION_MESSAGE
             }
         return Response(response)
 
@@ -426,7 +427,7 @@ class ResetPasswordView(APIView):
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
                 absurl = "http://vifbox.org/new-password/?token="+token
                 email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
-                data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
+                data = {'email_body': email_body, 'email_subject': EMAIL_SUBJECT, "to_email": user.email}
                 Thread(target=VifUtils.send_email, args=(data,)).start()
                 response = {
                     'status': 'success',
