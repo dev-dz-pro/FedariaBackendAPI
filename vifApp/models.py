@@ -5,7 +5,6 @@ from django.utils import timezone
 import datetime
 
 
-
 class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     email = models.CharField(max_length=255, blank=True, null=True)
