@@ -20,7 +20,7 @@ EMAIL_VERIFICATION_MESSAGE = 'Email was sent to you, please verify your email to
 
 class RegisterView(APIView): 
     def post(self, request):
-        username = request.data["first_name"] + request.data["last_name"] + "_" + request.data["email"].split("@")[0] # VifUtils.generate_username(request.data["first_name"])
+        username =  VifUtils.generate_username(request.data["first_name"]) # request.data["first_name"] + request.data["last_name"] + "_" + request.data["email"].split("@")[0]
         request.data["username"] = username
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
@@ -480,7 +480,7 @@ class GithubInfo(APIView):
             return Response(githubuser_data, status.HTTP_400_BAD_REQUEST)
         github_user = User.objects.filter(github_id=githubuser_id)
         if not github_user:
-            username = githubuser_data["login"] + "_G" # VifUtils.generate_username(githubuser_data["login"])
+            username = VifUtils.generate_username(githubuser_data["login"]) # githubuser_data["login"] + "_G" 
             user = User.objects.create_user(username=username, github_id=githubuser_id)
             if not user.is_verified:
                 user.is_verified = True

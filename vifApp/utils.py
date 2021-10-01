@@ -1,6 +1,6 @@
 from django.core.mail import EmailMessage
-import random
-
+import string
+import secrets
 
 class VifUtils:
     @staticmethod
@@ -8,11 +8,12 @@ class VifUtils:
         email = EmailMessage(subject=data["email_subject"], body=data["email_body"], to=[data["to_email"]])
         email.send()
     
-'''
-# @staticmethod
-# def generate_username(name):
-#     return name + str(random.randint(10000, 99999))
-'''
-
+    @staticmethod
+    def generate_username(name):
+        ran_str = ''.join(secrets.choice(string.ascii_uppercase +
+                                        string.digits+string.ascii_lowercase)
+                                        for _ in range(9))
+        print("Random String : " + str(ran_str))
+        return name + "_" + str(ran_str)
 
         
