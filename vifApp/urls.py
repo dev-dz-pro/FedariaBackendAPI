@@ -28,6 +28,6 @@ urlpatterns = [
 
     path('github-auth/', GithubInfo.as_view(), name="github-info"),
 
-    path('kanban/', include('kanban.urls')),
+    path('dash/', include('kanban.urls')),
 ] 
 

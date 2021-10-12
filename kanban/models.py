@@ -11,7 +11,7 @@ class Portfolio(models.Model):
     pined_portfolio = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
-        unique_together = (('portfolio_name', 'portfolio_user'),)
+        unique_together = ('portfolio_name', 'portfolio_user') 
     def was_published_today(self):
         return self.created_at >= timezone.now() - datetime.timedelta(days=1)
     def __str__(self):
@@ -26,6 +26,7 @@ def board_default():
                     ]
             }
 
+
 class Project(models.Model):
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE)
     name = models.CharField(max_length=50)
@@ -38,7 +39,7 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     board = models.JSONField(default=board_default)
     class Meta:
-        unique_together = (('name', 'portfolio'),)
+        unique_together = ('name', 'portfolio')
     def was_published_today(self):
         return self.created_at >= timezone.now() - datetime.timedelta(days=1)
     def __str__(self):
