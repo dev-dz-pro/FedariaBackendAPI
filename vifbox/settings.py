@@ -86,6 +86,7 @@ CHANNEL_LAYERS = {
         'CONFIG': {
             "hosts": [(os.environ.get('REDIS_DOMAIN') , os.environ.get('REDIS_PORT') )],
         },
+        "ROUTING": "kanban.routing.websocket_urlpatterns",
     },
 }
 
