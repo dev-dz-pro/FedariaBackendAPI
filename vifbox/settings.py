@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'vifApp',
+    'kanban',
     'phonenumber_field',
     # 'storages'
 ]

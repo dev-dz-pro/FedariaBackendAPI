@@ -2,6 +2,8 @@ from rest_framework import serializers
 from .models import User
 from rest_framework.exceptions import ValidationError
 from rest_framework import status
+import re
+
 
 class UserSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=True, min_length=2)
@@ -9,7 +11,6 @@ class UserSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
     password = serializers.CharField(style={'input_type': 'password'}, write_only=True, required=True, min_length=8)
     
-
     class Meta:
         model = User
         fields = ['username', 'first_name', 'last_name', 'email', 'password']
@@ -64,6 +65,14 @@ class UpdateProfileSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     username = serializers.CharField(required=True)
     phone = serializers.CharField(allow_blank=True)
+
+    def validate(self, data):
+        value = data.get('phone')
+        reg = re.compile(r'^\+?1?\d{9,15}$')
+        if reg.match(value):  
+            return data
+        else:
+            raise ValidationError({"Phone number": "must be entered in the format: '+999999999'. Up to 15 digits allowed."})
 
 
 

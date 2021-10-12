@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from phonenumber_field.modelfields import PhoneNumberField
 from django.utils import timezone
 import datetime
 
@@ -9,7 +8,7 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     email = models.CharField(max_length=255, blank=True, null=True)
     github_id = models.BigIntegerField(unique=True, blank=True, null=True)
-    phone_number = PhoneNumberField(blank=True)
+    phone_number = models.CharField(max_length=17)
     profile_image = models.ImageField(default="default.jpg", upload_to="profile_pics")
     profile_title = models.CharField(max_length=255)
     company_email = models.EmailField(blank=True)

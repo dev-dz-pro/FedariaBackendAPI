@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from .views import (RegisterView, LoginView, HomeView,
                     SettingsView, ProfileView, EmailVerifyView, 
                     ResetPasswordView, NewPassView, ProfileInfoUpdate, EmailVerifyResendView,
@@ -27,5 +27,7 @@ urlpatterns = [
     path('password/reset/confirm/', NewPassView.as_view(), name="pass-email-verify"),
 
     path('github-auth/', GithubInfo.as_view(), name="github-info"),
+
+    path('kanban/', include('kanban.urls')),
 ] 
 

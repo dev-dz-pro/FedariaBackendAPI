@@ -1,6 +1,7 @@
 from django.core.mail import EmailMessage
 import string
 import secrets
+from django.core.exceptions import ValidationError
 
 class VifUtils:
     @staticmethod

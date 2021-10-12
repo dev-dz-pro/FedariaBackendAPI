@@ -9,6 +9,7 @@ from .utils import VifUtils
 from rest_framework import status
 from django.conf import settings
 import requests
+from django.db.utils import DataError
 from threading import Thread
 from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
                         UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer)
