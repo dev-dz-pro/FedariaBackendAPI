@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'channels',
     'vifApp',
     'kanban',
     'phonenumber_field',
@@ -77,6 +78,22 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'vifbox.wsgi.application'
+ASGI_APPLICATION = "vifbox.asgi.application"
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [(os.environ.get('REDIS_DOMAIN') , os.environ.get('REDIS_PORT') )],
+        },
+    },
+}
+
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels.layers.InMemoryChannelLayer"
+#     }
+# }
 
 
 # Database
@@ -93,6 +110,7 @@ DATABASES = {
         'PORT': os.environ.get('POSTGRES_PORT'),
     }
 }
+
 
 
 ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1"]
