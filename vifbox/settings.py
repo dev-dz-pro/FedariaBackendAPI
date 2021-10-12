@@ -80,20 +80,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'vifbox.wsgi.application'
 ASGI_APPLICATION = "vifbox.asgi.application"
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [(os.environ.get('REDIS_DOMAIN') , os.environ.get('REDIS_PORT') )],
-        },
-    },
-}
-
 # CHANNEL_LAYERS = {
-#     "default": {
-#         "BACKEND": "channels.layers.InMemoryChannelLayer"
-#     }
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {
+#             "hosts": [(os.environ.get('REDIS_DOMAIN') , os.environ.get('REDIS_PORT') )],
+#         },
+#     },
 # }
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
 
 
 # Database
