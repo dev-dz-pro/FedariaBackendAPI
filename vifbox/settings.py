@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     'channels',
     'vifApp',
     'kanban',
-    'phonenumber_field',
+    # 'phonenumber_field',
     # 'storages'
 ]
 
