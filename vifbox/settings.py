@@ -86,7 +86,6 @@ CHANNEL_LAYERS = {
         'CONFIG': {
             "hosts": [("127.0.0.1", 6379)],
         },
-        "ROUTING": "kanban.routing.websocket_urlpatterns",
     },
 }
 
