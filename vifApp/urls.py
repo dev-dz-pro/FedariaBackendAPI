@@ -2,7 +2,7 @@ from django.urls import path, include
 from .views import (RegisterView, LoginView, HomeView,
                     SettingsView, ProfileView, EmailVerifyView, 
                     ResetPasswordView, NewPassView, ProfileInfoUpdate, EmailVerifyResendView,
-                    ProfileImageUpdate, SettingsInfoUpdate, GithubInfo, TokenRefreshView, ProfileSetCompanyUpdate)
+                    ProfileImageUpdate, SettingsInfoUpdate, SocialAuth, TokenRefreshView, ProfileSetCompanyUpdate)
 
 
 urlpatterns = [
@@ -26,7 +26,9 @@ urlpatterns = [
     path('password/reset/', ResetPasswordView.as_view(), name='password-reset'),
     path('password/reset/confirm/', NewPassView.as_view(), name="pass-email-verify"),
 
-    path('github-auth/', GithubInfo.as_view(), name="github-info"),
+    # path('github-auth/', GithubInfo.as_view(), name="github-info"),
+    path('social_auth/', SocialAuth.as_view(), name="social-auth"),
+    
 
     path('dash/', include('kanban.urls')),
 ] 

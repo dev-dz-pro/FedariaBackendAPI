@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     'channels',
     'vifApp',
     'kanban',
-    'phonenumber_field',
+    # 'phonenumber_field',
     # 'storages'
 ]
 
@@ -88,12 +88,6 @@ CHANNEL_LAYERS = {
         },
     },
 }
-
-# CHANNEL_LAYERS = {
-#     "default": {
-#         "BACKEND": "channels.layers.InMemoryChannelLayer"
-#     }
-# }
 
 
 # Database
@@ -149,16 +143,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 if DEBUG:
-    STATIC_URL = '/static/'
+    STATIC_URL = '/api/static/'
     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-    MEDIA_URL = '/media/'
+    MEDIA_URL = '/api/media/'
 else:
-    STATIC_URL = '/static/'
-    MEDIA_URL = '/static/media/'
+    STATIC_URL = '/api/static/'
+    MEDIA_URL = '/api/static/media/'
     STATICFILES_DIRS = [BASE_DIR / 'static']
     STATIC_ROOT = BASE_DIR / 'staticfiles'
-    MEDIA_ROOT = BASE_DIR / 'static/media'
+    MEDIA_ROOT = BASE_DIR / 'api/static/media'
 
 
 # Default primary key field type
@@ -172,6 +166,9 @@ AUTH_USER_MODEL = 'vifApp.User'
 CORS_ALLOWED_ORIGINS = [os.environ.get("front_domain"), "http://localhost:3000"]  # CORS_ORIGIN_ALLOW_ALL
 CORS_ALLOW_CREDENTIALS = True
 
+ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY_ID')
+SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.office365.com'

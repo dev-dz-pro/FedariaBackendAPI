@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
 from .models import User, UserNotification
 import jwt
+import time
 import os
+import boto3
 import datetime
 from .utils import VifUtils
 from rest_framework import status
@@ -12,7 +14,7 @@ import requests
 from django.db.utils import DataError
 from threading import Thread
 from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
-                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer)
+                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer, SocialAuthSerializer)
 
 
 UNAUTHONTICATED = 'Unauthenticated!'
@@ -276,8 +278,23 @@ class ProfileImageUpdate(APIView):
         serializer = UpdateProfileImageSerializer(data=request.data)
         if serializer.is_valid():
             file = request.FILES['profile_img_url']
+
+            #----------------------upload to aws--------------------
+            s3 = boto3.client('s3', region_name='eu-west-3')
+            BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+            if str(user.profile_image).startswith("https://vifbox-backend.s3.amazonaws.com"):
+                file_aws_name = user.profile_image.split("?")[0].split("amazonaws.com/")[1] #"profile_pics/img_"+timestr
+            else:
+                timestr = time.strftime("%Y%m%d%H%M%S")
+                ext = "."+file.name.split(".")[-1]
+                file_aws_name = "profile_pics/img_"+timestr+ext
+            s3.upload_fileobj(file, BUCKET_NAME, file_aws_name)
+            img_url = VifUtils.create_presigned_url(bucket_name=settings.BUCKET_NAME, region_name='eu-west-3', object_name=file_aws_name, expiration=604000)
+            #------------------------------------------
+
             profile_title = request.data["profile_title"]
-            user.profile_image = file
+            # user.profile_image = file
+            user.profile_image = img_url
             user.profile_title = profile_title
             user.save()
             response = {
@@ -285,7 +302,7 @@ class ProfileImageUpdate(APIView):
                 'code': status.HTTP_200_OK,
                 'message': 'Profile image and title updated successfully',
                 'data': {
-                    "profile_image": user.profile_image.url,
+                    "profile_image": user.profile_image,  # user.profile_image.url
                     "profile_title": user.profile_title
                 }
             }
@@ -468,40 +485,81 @@ class NewPassView(APIView):
             raise AuthenticationFailed(response)
 
 
+class SocialAuth(APIView):
+    def post(self, request):
+        serializer = SocialAuthSerializer(data=request.data)
+        if serializer.is_valid():
+            social_user = User.objects.filter(email=request.data["email"], social_id=request.data["social_id"])
+            if social_user:
+                payload_access = {
+                    'id': social_user.first().id,
+                    'iat': datetime.datetime.utcnow(),
+                    'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                }
+                payload_refresh = {
+                    'id': social_user.first().id,
+                    'iat': datetime.datetime.utcnow(),
+                    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+                }
+                access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+                refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+                return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
+            else:
+                user_data = serializer.data
+                if not user_data["profile_image"]:
+                    del user_data["profile_image"]
+                User.objects.create(**user_data)
+                response = {
+                        'status': 'success',
+                        "type": "signup", 
+                        'code': status.HTTP_200_OK,
+                        'message': "Registration seccussfuly with social auth.",
+                        'info': serializer.data
+                    }
+                return Response(response)
+        else:
+            err = list(serializer.errors.items())
+            response = {
+                'status': 'error',
+                'code': status.HTTP_400_BAD_REQUEST,
+                'message': '(' + err[0][0] + ') ' + err[0][1][0]
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
 
-class GithubInfo(APIView):
-    def get(self, request):
-        token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
-        endpoint = "https://api.github.com/user"
-        headers = {"Authorization": f"token {token}"}
-        githubuser_data = requests.get(endpoint, headers=headers).json()
-        try:
-            githubuser_id = githubuser_data["id"]
-        except KeyError:
-            return Response(githubuser_data, status.HTTP_400_BAD_REQUEST)
-        github_user = User.objects.filter(github_id=githubuser_id)
-        if not github_user:
-            username = VifUtils.generate_username(githubuser_data["login"]) # githubuser_data["login"] + "_G" 
-            user = User.objects.create_user(username=username, github_id=githubuser_id)
-            if not user.is_verified:
-                user.is_verified = True
-                user.save()
-                UserNotification.objects.create(notification_user=user, 
-                                                notification_text="welcome to vifbox",
-                                                notification_from="Vifbox", notification_url="to_url/")
-        payload_access = {
-            'id': github_user.first().id,
-            'iat': datetime.datetime.utcnow(),
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-        }
-        payload_refresh = {
-            'id': github_user.first().id,
-            'iat': datetime.datetime.utcnow(),
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-        }
-        access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
-        refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
-        return Response({"access": access_token, "refresh": refresh_token})
+
+# class GithubInfo(APIView):
+#     def get(self, request):
+#         token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
+#         endpoint = "https://api.github.com/user"
+#         headers = {"Authorization": f"token {token}"}
+#         githubuser_data = requests.get(endpoint, headers=headers).json()
+#         try:
+#             githubuser_id = githubuser_data["id"]
+#         except KeyError:
+#             return Response(githubuser_data, status.HTTP_400_BAD_REQUEST)
+#         github_user = User.objects.filter(github_id=githubuser_id)
+#         if not github_user:
+#             username = VifUtils.generate_username(githubuser_data["login"]) # githubuser_data["login"] + "_G" 
+#             user = User.objects.create_user(username=username, github_id=githubuser_id)
+#             if not user.is_verified:
+#                 user.is_verified = True
+#                 user.save()
+#                 UserNotification.objects.create(notification_user=user, 
+#                                                 notification_text="welcome to vifbox",
+#                                                 notification_from="Vifbox", notification_url="to_url/")
+#         payload_access = {
+#             'id': github_user.first().id,
+#             'iat': datetime.datetime.utcnow(),
+#             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+#         }
+#         payload_refresh = {
+#             'id': github_user.first().id,
+#             'iat': datetime.datetime.utcnow(),
+#             'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+#         }
+#         access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+#         refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+#         return Response({"access": access_token, "refresh": refresh_token})
 
 
 

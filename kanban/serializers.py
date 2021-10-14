@@ -26,8 +26,8 @@ class KanbanBoardSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     projectdescription = serializers.CharField(required=True)
     agileframwork = serializers.CharField(required=True)
-    productowner = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
-    scrummaster = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
+    productowner = serializers.EmailField(max_length=None, min_length=None, allow_blank=True)
+    scrummaster = serializers.EmailField(max_length=None, min_length=None, allow_blank=True)
 
 
 class TaskSerializer(serializers.Serializer):

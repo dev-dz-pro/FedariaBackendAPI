@@ -40,6 +40,17 @@ class UserSerializer(serializers.ModelSerializer):
     
 
 
+class SocialAuthSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=True)
+    email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
+    profile_image = serializers.CharField(allow_blank=True)
+    social_id = serializers.IntegerField(required=True)
+    class Meta:
+        model = User
+        fields = ['username', 'profile_image', 'email', 'social_id']
+
+
+
 class LoginSerializer(serializers.Serializer):
     model = User
     email = serializers.CharField(required=True)

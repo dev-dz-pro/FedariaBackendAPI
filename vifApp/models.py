@@ -7,9 +7,10 @@ import datetime
 class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     email = models.CharField(max_length=255, blank=True, null=True)
-    github_id = models.BigIntegerField(unique=True, blank=True, null=True)
+    social_id = models.BigIntegerField(blank=True, null=True)
     phone_number = models.CharField(max_length=17, blank=True, null=True)
-    profile_image = models.ImageField(default="default.jpg", upload_to="profile_pics")
+    # profile_image = models.ImageField(default="default.jpg", upload_to="profile_pics")
+    profile_image = models.URLField(max_length=600, default="https://yt3.ggpht.com/ytc/AKedOLTe9zzL4WQB8f45LqYCzx8K6Ww-df74yiKKI2ZC=s88-c-k-c0x00ffffff-no-rj")
     profile_title = models.CharField(max_length=255)
     company_email = models.EmailField(blank=True)
     company_name = models.CharField(max_length=255, blank=True)
