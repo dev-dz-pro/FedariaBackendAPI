@@ -228,7 +228,7 @@ class ProfileView(APIView):
             'data': {
                 "name": user.first_name,
                 "username": user.username,
-                "profile_img_url": user.profile_image.url,
+                "profile_img_url": user.profile_image,
                 "profile_title": user.profile_title,
                 "email": user.email,
                 "phone_number": str(user.phone_number),
@@ -358,7 +358,7 @@ class SettingsView(APIView):
             'data': {
                 "name": user.first_name,
                 "username": user.username,
-                "profile_img_url": user.profile_image.url,
+                "profile_img_url": user.profile_image,
                 "is_verified": user.is_verified,
                 "notification": notf
             }
