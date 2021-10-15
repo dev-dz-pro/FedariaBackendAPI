@@ -31,7 +31,5 @@ class KanbanBoardSerializer(serializers.Serializer):
 
 
 class TaskSerializer(serializers.Serializer):
-    portfolio = serializers.CharField(required=True)
-    project = serializers.CharField(required=True)
     col = serializers.CharField(required=True)
     description = serializers.CharField(required=True)

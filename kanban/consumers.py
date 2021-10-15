@@ -9,9 +9,9 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         user = self.scope["user"]
         self.user = user
         prms_dict = self.scope['url_route']['kwargs']
-        pf = prms_dict['pf']
-        pj = prms_dict['prjct']
-        self.room_name = user.username + pf + pj
+        self.pf = prms_dict['pf']
+        self.pj = prms_dict['prjct']
+        self.room_name = user.username + self.pf + self.pj
         self.room_group_name = 'team_%s' % self.room_name
 
         # Join room group
@@ -67,7 +67,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         serializer = TaskSerializer(data=data)
         if serializer.is_valid():
             user_data = serializer.data
-            project = await database_sync_to_async(self.get_project)(user_data)
+            project = await database_sync_to_async(self.get_project)()
             if project:        
                 for i, d in enumerate(project.board["board"]):
                     if user_data["col"] in d:
@@ -89,7 +89,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     
 
     async def change_tasks_col(self, request_id, data):
-        project = await database_sync_to_async(self.get_project)(data)
+        project = await database_sync_to_async(self.get_project)()
         try:
             if project:  
                 col_values = project.board["board"] # col_values = [{'Backlog': [{'task_des': 'task kkkk', 'task_pos': 0}, {'task_des': 'task kkkk22222', 'task_pos': 1}]}, {'To Do': []}, {'In Progress': []}, {'Done': []}]
@@ -100,7 +100,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 for c in col_values:
                     if from_col in c:
                         if c[from_col]:
-                            ids_list = data["tasks_ids"].split(",")
+                            ids_list = data["tasks_ids"]  #.split(",")
                             for i in ids_list:
                                 tasks_2_move.append(c[from_col].pop(int(i)))
                             break
@@ -127,7 +127,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
 
     async def add_col(self, request_id, data):
-        project = await database_sync_to_async(self.get_project)(data)
+        project = await database_sync_to_async(self.get_project)()
         colname = data["colname"]
         if project:
             project.board["board"].append({colname: []}) # should be checked from the front thats the column not exists.
@@ -140,7 +140,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
 
     async def delete_col(self, request_id, data):
-        project = await database_sync_to_async(self.get_project)(data)
+        project = await database_sync_to_async(self.get_project)()
         col_index = data["col_index"]
         if project:
             try:
@@ -157,7 +157,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
 
     async def change_col_order(self, request_id, data):
-        project = await database_sync_to_async(self.get_project)(data)
+        project = await database_sync_to_async(self.get_project)()
         col_index = data["col_index"]
         to_index = data["to_index"]
         if project:
@@ -181,8 +181,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             return await self.send(text_data=json.dumps(response))
 
 
-    def get_project(self, user_data):
-        return Project.objects.filter(name=user_data["project"], portfolio__portfolio_user=self.user, portfolio__portfolio_name=user_data["portfolio"]).first()
+    def get_project(self):
+        return Project.objects.filter(name=self.pj, portfolio__portfolio_user=self.user, portfolio__portfolio_name=self.pf).first()
 
     @database_sync_to_async
     def search_prj(self, user_data):

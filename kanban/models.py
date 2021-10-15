@@ -34,8 +34,8 @@ class Project(models.Model):
     pined_project = models.BooleanField(default=False)
     AGILE_CHOICES = [('Scrum', 'Scrum'), ('Kanban', 'Kanban')]
     agile_framwork = models.CharField(max_length=6, choices=AGILE_CHOICES, default='Kanban') 
-    product_owner = models.EmailField(max_length=254)
-    scrum_master = models.EmailField(max_length=254)
+    product_owner = models.EmailField(max_length=254, blank=True)
+    scrum_master = models.EmailField(max_length=254, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     board = models.JSONField(default=board_default)
     class Meta:

@@ -1,4 +1,4 @@
-from django.contrib.auth import get_user_model
+from vifApp.models import User
 from django.contrib.auth.models import AnonymousUser
 from channels.middleware import BaseMiddleware
 from channels.auth import AuthMiddlewareStack
@@ -10,11 +10,10 @@ from django.conf import settings
 
 
 @database_sync_to_async
-def get_user(validated_token):
+def get_user(user_id):
     try:
-        user = get_user_model().objects.get(id=validated_token["id"])
-        return user
-    except Exception:
+        return User.objects.get(id=user_id)
+    except User.DoesNotExist:
         return AnonymousUser()
 
 
@@ -29,7 +28,7 @@ class JwtAuthMiddleware(BaseMiddleware):
             decoded_data = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         except (jwt.DecodeError, jwt.ExpiredSignatureError, KeyError):
             return None
-        scope["user"] = await get_user(validated_token=decoded_data)
+        scope["user"] = await get_user(user_id=decoded_data["id"])
         return await super().__call__(scope, receive, send)
 
 

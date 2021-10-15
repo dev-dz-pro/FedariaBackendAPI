@@ -41,8 +41,6 @@ INSTALLED_APPS = [
     'channels',
     'vifApp',
     'kanban',
-    # 'phonenumber_field',
-    # 'storages'
 ]
 
 MIDDLEWARE = [
@@ -107,7 +105,7 @@ DATABASES = {
 
 
 
-ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1", "https://websocketking.com", "http://localhost:3000"]
 
 
 # Password validation
