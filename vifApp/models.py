@@ -6,7 +6,7 @@ import datetime
 
 class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
-    # name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50)
     email = models.CharField(max_length=255, blank=True, null=True)
     social_id = models.CharField(max_length=50, blank=True, null=True)
     phone_number = models.CharField(max_length=17, blank=True, null=True)
