@@ -7,7 +7,8 @@ urlpatterns = [
     path('pin_unpin_portfolio/<str:pf>/<int:state>/', views.PinPortfolio.as_view(), name="pin-unpin-portfolio"),
 
     path('create_project/', views.CreateProject.as_view(), name="create-project"),
-    path('project/<str:pf>/<str:prjct>/', views.GetProject.as_view(), name="board"),   # wss main route
+    path('project/<str:pf>/<str:prjct>/', views.GetProject.as_view(), name="board"),
+    path('projects/', views.GetAllProjects.as_view(), name="projects"), 
     # path('search_project/<str:project_name>/', views.Search4Project.as_view(), name="search-project"), # wss
     path('pin_unpin_project/<str:pf>/<str:prjct>/<int:state>/', views.PinProject.as_view(), name="pin-unpin-project"), 
 

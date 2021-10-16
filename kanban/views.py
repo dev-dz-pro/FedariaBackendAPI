@@ -85,7 +85,20 @@ class GetProject(APIView):
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Project not exists'}
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
-        
+
+class GetAllProjects(APIView):
+    def get(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        projects = Project.objects.filter(portfolio__portfolio_user=user)
+        if projects:
+            data = [{"portfolio_name": prj.portfolio.portfolio_name, "project_name": prj.name} for prj in projects]
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'All Projects', 'data': data}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'No project exists.'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
 
 class CreateProject(APIView):
     def post(self, request):
