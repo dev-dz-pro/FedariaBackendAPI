@@ -25,6 +25,8 @@ class RegisterView(APIView):
     def post(self, request):
         username =  VifUtils.generate_username(request.data["first_name"]) # request.data["first_name"] + request.data["last_name"] + "_" + request.data["email"].split("@")[0]
         request.data["username"] = username
+        request.data["name"] = request.data["first_name"] + " " + request.data["last_name"]
+        print(request.data)
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -45,7 +47,7 @@ class RegisterView(APIView):
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
         absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token # will add it to var inv
-        email_body = 'Hi '+ user.first_name + ', Click the link below to verify your email\n' + absurl
+        email_body = 'Hi '+ user.name + ', Click the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Vifbox account activation', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
@@ -69,7 +71,7 @@ class EmailVerifyResendView(APIView):
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
         absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token 
-        email_body = 'Hi '+ user.first_name + ' Use the link below to verify your email\n' + absurl
+        email_body = 'Hi '+ user.name + ' Use the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
@@ -226,7 +228,7 @@ class ProfileView(APIView):
             'status': 'success',
             'code': status.HTTP_200_OK,
             'data': {
-                "name": user.first_name,
+                "name": user.name,
                 "username": user.username,
                 "profile_img_url": user.profile_image,
                 "profile_title": user.profile_title,
@@ -249,14 +251,14 @@ class ProfileInfoUpdate(APIView):
             user_data = serializer.data
             user_exist = User.objects.filter(username=user_data["username"])
             if not user_exist:
-                user.first_name = user_data["name"]
+                user.name = user_data["name"]
                 user.username = user_data["username"]
                 user.phone_number = user_data["phone"]
                 user.save()
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Profile info updated successfully'}
                 return Response(response)
             elif user.username == user_exist.first().username:
-                user.first_name = user_data["name"]
+                user.name = user_data["name"]
                 user.phone_number = user_data["phone"]
                 user.save()
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Profile info updated successfully'}
@@ -356,7 +358,7 @@ class SettingsView(APIView):
             'status': 'success',
             'code': status.HTTP_200_OK,
             'data': {
-                "name": user.first_name,
+                "name": user.name,
                 "username": user.username,
                 "profile_img_url": user.profile_image,
                 "is_verified": user.is_verified,
@@ -423,7 +425,7 @@ class ResetPasswordView(APIView):
                 }
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
                 absurl = os.environ.get("front_domain") + "/new-password/?token=" + token
-                email_body = 'Hi '+ user.first_name + ' Use the link below to Change your password\n' + absurl
+                email_body = 'Hi '+ user.name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Vifbox Reset password', "to_email": user.email}
                 Thread(target=VifUtils.send_email, args=(data,)).start()
                 response = {
@@ -506,9 +508,10 @@ class SocialAuth(APIView):
                 return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
             else:
                 user_data = serializer.data
-                if not user_data["profile_image"]:
+                if user_data["profile_image"] == "":
                     del user_data["profile_image"]
-                User.objects.create(**user_data)
+                username =  VifUtils.generate_username(request.data["name"])
+                User.objects.create(username=username, email=user_data["email"], name=request.data["name"], profile_image=user_data["profile_image"], social_id=user_data["social_id"])
                 response = {
                         'status': 'success',
                         "type": "signup", 

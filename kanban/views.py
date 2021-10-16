@@ -96,8 +96,8 @@ class GetAllProjects(APIView):
             response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'All Projects', 'data': data}
             return Response(response)
         else:
-            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'No project exists.'}
-            return Response(response, status.HTTP_400_BAD_REQUEST)
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'All Projects', 'data': []}
+            return Response(response)
 
 
 class CreateProject(APIView):
