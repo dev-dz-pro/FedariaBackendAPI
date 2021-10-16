@@ -39,11 +39,16 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
     
 
+# class SocialAuthSerializer(serializers.Serializer):
+#     name = serializers.CharField(required=True)
+#     email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
+#     profile_image = serializers.CharField(allow_blank=True)
+#     social_id = serializers.CharField(max_length=50, required=True, allow_blank=False)
 class SocialAuthSerializer(serializers.Serializer):
-    name = serializers.CharField(required=True)
+    name = serializers.CharField(allow_blank=True)
     email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
     profile_image = serializers.CharField(allow_blank=True)
-    social_id = serializers.CharField(max_length=50, required=True, allow_blank=False)
+    social_id = serializers.CharField(allow_blank=True)
 
 
 class LoginSerializer(serializers.Serializer):

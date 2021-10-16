@@ -506,19 +506,52 @@ class SocialAuth(APIView):
                 refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
                 return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
             else:
-                user_data = serializer.data
-                if user_data["profile_image"] == "":
-                    del user_data["profile_image"]
-                username =  VifUtils.generate_username(request.data["name"])
-                User.objects.create(username=username, email=user_data["email"], name=request.data["name"], profile_image=user_data["profile_image"], social_id=user_data["social_id"])
-                response = {
-                        'status': 'success',
-                        "type": "signup", 
-                        'code': status.HTTP_200_OK,
-                        'message': "Registration seccussfuly with social auth.",
-                        'info': serializer.data
+                #------------------------ Added ----------------------------#
+                github_user = User.objects.filter(email=request.data["email"])
+                if github_user:
+                    payload_access = {
+                        'id': github_user.first().id,
+                        'iat': datetime.datetime.utcnow(),
+                        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
                     }
-                return Response(response)
+                    payload_refresh = {
+                        'id': github_user.first().id,
+                        'iat': datetime.datetime.utcnow(),
+                        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+                    }
+                    access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+                    refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+                    return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
+                #----------------------------------------------------#
+                else:
+                    user_data = serializer.data
+                    if user_data["profile_image"] == "":
+                        del user_data["profile_image"]
+                    username =  VifUtils.generate_username(request.data["name"])
+                    user = User.objects.create(username=username, email=user_data["email"], name=request.data["name"], profile_image=user_data["profile_image"], social_id=user_data["social_id"])
+                    # response = {
+                    #         'status': 'success',
+                    #         "type": "signup", 
+                    #         'code': status.HTTP_200_OK,
+                    #         'message': "Registration seccussfuly with social auth.",
+                    #         'info': serializer.data
+                    #     }
+                    # return Response(response)
+                    #------------------------ Added ----------------------------#
+                    payload_access = {
+                        'id': user.id,
+                        'iat': datetime.datetime.utcnow(),
+                        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                    }
+                    payload_refresh = {
+                        'id': user.id,
+                        'iat': datetime.datetime.utcnow(),
+                        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+                    }
+                    access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+                    refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+                    return Response({"type": "signup", "access": access_token, "refresh": refresh_token})
+                    #----------------------------------------------------------#
         else:
             err = list(serializer.errors.items())
             response = {
