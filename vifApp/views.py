@@ -543,7 +543,7 @@ class SocialAuth(APIView):
                     }
                     access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
                     refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
-                    return Response({"type": "signup", "access": access_token, "refresh": refresh_token, "data": {"username": user.username, "email": user.email, "name": user.name, "profile_image": user.profile_image, "social_id": user.social_id}})
+                    return Response({"type": "signup", "access": access_token, "refresh": refresh_token})
                     #----------------------------------------------------------#
         else:
             err = list(serializer.errors.items())
