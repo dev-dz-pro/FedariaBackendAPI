@@ -522,22 +522,15 @@ class SocialAuth(APIView):
                     access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
                     refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
                     return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
-                #----------------------------------------------------#
                 else:
                     user_data = serializer.data
-                    if user_data["profile_image"] == "":
-                        del user_data["profile_image"]
-                    username =  VifUtils.generate_username(request.data["name"])
+                    if user_data["name"] is None or user_data["name"] == "":
+                        username =  VifUtils.generate_username("vifbox")
+                    else:
+                        username =  VifUtils.generate_username(request.data["name"])
+                    if user_data["profile_image"] == "" or user_data["profile_image"] is None:
+                        user_data["profile_image"] = "https://vifbox.org/api/media/default.jpg"
                     user = User.objects.create(username=username, email=user_data["email"], name=request.data["name"], profile_image=user_data["profile_image"], social_id=user_data["social_id"])
-                    # response = {
-                    #         'status': 'success',
-                    #         "type": "signup", 
-                    #         'code': status.HTTP_200_OK,
-                    #         'message': "Registration seccussfuly with social auth.",
-                    #         'info': serializer.data
-                    #     }
-                    # return Response(response)
-                    #------------------------ Added ----------------------------#
                     payload_access = {
                         'id': user.id,
                         'iat': datetime.datetime.utcnow(),
@@ -550,7 +543,7 @@ class SocialAuth(APIView):
                     }
                     access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
                     refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
-                    return Response({"type": "signup", "access": access_token, "refresh": refresh_token})
+                    return Response({"type": "signup", "access": access_token, "refresh": refresh_token, "data": {"username": user.username, "email": user.email, "name": user.name, "profile_image": user.profile_image, "social_id": user.social_id}})
                     #----------------------------------------------------------#
         else:
             err = list(serializer.errors.items())
