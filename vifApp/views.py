@@ -490,7 +490,7 @@ class SocialAuth(APIView):
     def post(self, request):
         serializer = SocialAuthSerializer(data=request.data)
         if serializer.is_valid():
-            social_user = User.objects.filter(email=request.data["email"], social_id=request.data["social_id"])
+            social_user = User.objects.filter(email=request.data["email"])
             if social_user:
                 payload_access = {
                     'id': social_user.first().id,
@@ -506,28 +506,9 @@ class SocialAuth(APIView):
                 refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
                 return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
             else:
-                #------------------------ Added ----------------------------#
-                github_user = User.objects.filter(email=request.data["email"])
-                if github_user:
-                    payload_access = {
-                        'id': github_user.first().id,
-                        'iat': datetime.datetime.utcnow(),
-                        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-                    }
-                    payload_refresh = {
-                        'id': github_user.first().id,
-                        'iat': datetime.datetime.utcnow(),
-                        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-                    }
-                    access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
-                    refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
-                    return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
-                else:
+                try:
                     user_data = serializer.data
-                    if user_data["name"] is None or user_data["name"] == "":
-                        username =  VifUtils.generate_username("vifbox")
-                    else:
-                        username =  VifUtils.generate_username(request.data["name"])
+                    username =  VifUtils.generate_username(request.data["name"])
                     if user_data["profile_image"] == "" or user_data["profile_image"] is None:
                         user_data["profile_image"] = "https://vifbox.org/api/media/default.jpg"
                     user = User.objects.create(username=username, email=user_data["email"], name=request.data["name"], profile_image=user_data["profile_image"], social_id=user_data["social_id"])
@@ -544,7 +525,13 @@ class SocialAuth(APIView):
                     access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
                     refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
                     return Response({"type": "signup", "access": access_token, "refresh": refresh_token})
-                    #----------------------------------------------------------#
+                except:
+                    response = {
+                        'status': 'error',
+                        'code': status.HTTP_400_BAD_REQUEST,
+                        'message': 'Bad request.'
+                    }
+                    return Response(response, status.HTTP_400_BAD_REQUEST)
         else:
             err = list(serializer.errors.items())
             response = {
