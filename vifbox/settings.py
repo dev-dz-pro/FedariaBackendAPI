@@ -105,7 +105,7 @@ DATABASES = {
 
 
 
-ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1", "https://websocketking.com", "http://localhost:3000"]
+ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1", "https://websocketking.com", "http://localhost:3000", "172.24.0.0/16", "https://vifbox.org"]
 
 
 # Password validation
