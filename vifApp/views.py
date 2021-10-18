@@ -215,6 +215,10 @@ class HomeView(APIView):
         return Response(serializer.data)
 
 
+class SocAuthTest(APIView):
+    def get(self, request):
+        print(request)
+        return Response({})
 
 class ProfileView(APIView):
     def get(self, request):

@@ -46,6 +46,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'allow_cidr.middleware.AllowCIDRMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -105,8 +106,8 @@ DATABASES = {
 
 
 
-ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1", "https://websocketking.com", "http://localhost:3000"]
-
+ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1", "https://websocketking.com", "http://localhost:3000", os.environ.get("front_domain")]
+ALLOWED_CIDR_NETS = ['172.24.0.0/16']
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators

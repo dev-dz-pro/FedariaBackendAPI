@@ -1,7 +1,7 @@
 from django.urls import path, include
 from .views import (RegisterView, LoginView, HomeView,
                     SettingsView, ProfileView, EmailVerifyView, 
-                    ResetPasswordView, NewPassView, ProfileInfoUpdate, EmailVerifyResendView,
+                    ResetPasswordView, NewPassView, ProfileInfoUpdate, EmailVerifyResendView, SocAuthTest,
                     ProfileImageUpdate, SettingsInfoUpdate, SocialAuth, TokenRefreshView, ProfileSetCompanyUpdate)
 
 
@@ -28,6 +28,9 @@ urlpatterns = [
 
     # path('github-auth/', GithubInfo.as_view(), name="github-info"),
     path('social_auth/', SocialAuth.as_view(), name="social-auth"),
+
+    
+    path('social_auth_test/', SocAuthTest.as_view(), name="social-auth-test"),
     
 
     path('dash/', include('kanban.urls')),
