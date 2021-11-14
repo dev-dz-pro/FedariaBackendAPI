@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY') 
+SECRET_REFRESH_KEY = "" #os.environ.get('SECRET_REFRESH_KEY') TODO  TO SET IN DEPLOYMENT
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -169,12 +170,29 @@ CORS_ALLOW_CREDENTIALS = True
 ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY_ID')
 SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+REGION_NAME = os.environ.get('REGION_NAME')
+
+GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID')
+GITHUB_SECRET_KEY = os.environ.get('GITHUB_SECRET_KEY')
+
+
+GITLAB_CLIENT_ID = os.environ.get('GITLAB_CLIENT_ID')
+GITLAB_SECRET_KEY = os.environ.get('GITLAB_SECRET_KEY')
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.office365.com'
+# EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
+# EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+# SERVER_EMAIL = EMAIL_HOST_USER
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.office365.com'
+EMAIL_HOST = 'smtp-mail.outlook.com'
 EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
 EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
-EMAIL_PORT = 587
+EMAIL_PORT = 25
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 SERVER_EMAIL = EMAIL_HOST_USER

@@ -11,10 +11,10 @@ from .utils import VifUtils
 from rest_framework import status
 from django.conf import settings
 import requests
-from django.db.utils import DataError
 from threading import Thread
+from urllib.parse import parse_qs
 from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
-                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer, SocialAuthSerializer)
+                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer)
 
 
 UNAUTHONTICATED = 'Unauthenticated!'
@@ -47,7 +47,7 @@ class RegisterView(APIView):
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
         absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token # will add it to var inv
         email_body = 'Hi '+ user.name + ', Click the link below to verify your email\n' + absurl
-        data = {'email_body': email_body, 'email_subject': 'Vifbox account activation', "to_email": user.email}
+        data = {'email_body': email_body, 'email_subject': 'Vifbox account activation', "to_email": [user.email]}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
                 'status': 'success',
@@ -71,7 +71,7 @@ class EmailVerifyResendView(APIView):
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
         absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token 
         email_body = 'Hi '+ user.name + ' Use the link below to verify your email\n' + absurl
-        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": user.email}
+        data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": [user.email]}
         Thread(target=VifUtils.send_email, args=(data,)).start()
         response = {
                 'status': 'success',
@@ -166,7 +166,7 @@ class LoginView(APIView):
             'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
         }
         access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
-        refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+        refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY+settings.SECRET_REFRESH_KEY, algorithm='HS256')
         return Response({"access": access_token, "refresh": refresh_token})
 
 
@@ -182,7 +182,7 @@ class TokenRefreshView(APIView):
             }
             raise AuthenticationFailed(response)
         try:
-            payload = jwt.decode(refresh, settings.SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(refresh, settings.SECRET_KEY+settings.SECRET_REFRESH_KEY, algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
@@ -215,16 +215,147 @@ class HomeView(APIView):
         return Response(serializer.data)
 
 
-class SocAuthTest(APIView):
+class Github_SocAuthTest(APIView):
     def get(self, request):
-        print(request)
-        return Response({})
+        code = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
+        endpoint = "https://github.com/login/oauth/access_token"
+        data = {"code": code,
+                "client_id": settings.GITHUB_CLIENT_ID,
+                "client_secret": settings.GITHUB_SECRET_KEY,
+                "redirect_uri": "http://localhost:3000/social_auth"}
+        social_res = requests.post(endpoint, data=data)
+        if 'error' in parse_qs(social_res.text):
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad verification code'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+        else:
+            access_token = parse_qs(social_res.text)['access_token'][0]
+
+        endpoint_user = "https://api.github.com/user"
+        endpoint_email = "https://api.github.com/user/emails"
+        headers = {"Authorization": f"token {access_token}"}
+        user_info = requests.get(endpoint_user, headers=headers)
+        githubuser_data = user_info.json()
+        user_email = requests.get(endpoint_email, headers=headers)
+        githubuser_data_email = user_email.json()[0]
+        if user_info.status_code <= 200 and user_email.status_code <= 200:
+            social_user = User.objects.filter(email=githubuser_data_email["email"], social_id=githubuser_data["id"]).first()
+            if not social_user:
+                username =  VifUtils.generate_username(githubuser_data["login"])
+                try:
+                    social_user = User.objects.create(email=githubuser_data_email["email"], social_id=githubuser_data["id"], 
+                                                            username=username, profile_image=githubuser_data["avatar_url"],
+                                                            is_verified=githubuser_data_email["verified"])
+                except Exception as e:
+                    response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Email already exists, please signin.'}
+                    return Response(response, status.HTTP_400_BAD_REQUEST)
+            payload_access = {
+                'id': social_user.id,
+                'iat': datetime.datetime.utcnow(),
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+            }
+            payload_refresh = {
+                'id': social_user.id,
+                'iat': datetime.datetime.utcnow(),
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            }
+            access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+            refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY+settings.SECRET_REFRESH_KEY, algorithm='HS256')
+            return Response({"access": access_token, "refresh": refresh_token})
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Request is missing required authentication'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+class Gitlab_SocAuthTest(APIView):
+    def get(self, request):
+        code = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
+        endpoint = "https://gitlab.com/oauth/token"
+        data = {"code": code,
+                "client_id": settings.GITLAB_CLIENT_ID,
+                "client_secret": settings.GITLAB_SECRET_KEY,
+                "grant_type": "authorization_code",
+                "redirect_uri": "http://localhost:3000/social_auth"}
+        social_res = requests.post(endpoint, data=data).json()
+        if 'error' in social_res:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad verification code'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+        else:
+            access_token = social_res["access_token"]
+        endpoint_user = "https://gitlab.com/api/v4/user"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        user_info = requests.get(endpoint_user, headers=headers)
+        gitlabuser_data = user_info.json()
+        if user_info.status_code <= 200:
+            social_user = User.objects.filter(email=gitlabuser_data["email"], social_id=gitlabuser_data["id"]).first()
+            if not social_user:
+                username =  VifUtils.generate_username(gitlabuser_data["username"])
+                try:
+                    social_user = User.objects.create(email=gitlabuser_data["email"], social_id=gitlabuser_data["id"], 
+                                                            username=username, profile_image=gitlabuser_data["avatar_url"])
+                except Exception as e:
+                    response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Email already exists, please signin.'}
+                    return Response(response, status.HTTP_400_BAD_REQUEST)
+            payload_access = {
+                'id': social_user.id,
+                'iat': datetime.datetime.utcnow(),
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+            }
+            payload_refresh = {
+                'id': social_user.id,
+                'iat': datetime.datetime.utcnow(),
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            }
+            access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+            refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY+settings.SECRET_REFRESH_KEY, algorithm='HS256')
+            return Response({"access": access_token, "refresh": refresh_token})
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Request is missing required authentication'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class Google_SocAuthTest(APIView):
+    def get(self, request):
+        access_token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
+        endpoint = "https://www.googleapis.com/oauth2/v2/userinfo"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        social_res = requests.get(endpoint, headers=headers)
+        githubuser_data = social_res.json()
+        if social_res.status_code <= 200:
+            social_user = User.objects.filter(email=githubuser_data["email"], social_id=githubuser_data["id"]).first()
+            if not social_user:
+                username =  VifUtils.generate_username("vifbox_GGL")
+                try:
+                    social_user = User.objects.create(email=githubuser_data["email"], social_id=githubuser_data["id"], 
+                                                            username=username, profile_image=githubuser_data["picture"],
+                                                            is_verified=githubuser_data["verified_email"])
+                except Exception as e:
+                    response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Email already exists, please signin.'}
+                    return Response(response, status.HTTP_400_BAD_REQUEST)
+            payload_access = {
+                'id': social_user.id,
+                'iat': datetime.datetime.utcnow(),
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+            }
+            payload_refresh = {
+                'id': social_user.id,
+                'iat': datetime.datetime.utcnow(),
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            }
+            access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+            refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY+settings.SECRET_REFRESH_KEY, algorithm='HS256')
+            return Response({"access": access_token, "refresh": refresh_token})
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Request is missing required authentication credent…ogle.com/identity/sign-in/web/devconsole-project.'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
 
 class ProfileView(APIView):
     def get(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         notification = UserNotification.objects.filter(notification_user=user)
+        prf_img = user.get_presigned_url_img() 
+        if user.profile_image != prf_img:
+            user.profile_image = prf_img
+            user.save()
         kys = ("from", "desc", "url", "date") 
         notf = [{kys[0]: nt.notification_from, kys[1]: nt.notification_text, kys[2]: nt.notification_url, kys[3]: nt.created_at} for nt in notification] 
         response = {
@@ -233,7 +364,7 @@ class ProfileView(APIView):
             'data': {
                 "name": user.name,
                 "username": user.username,
-                "profile_img_url": user.profile_image,
+                "profile_img_url": prf_img,
                 "profile_title": user.profile_title,
                 "email": user.email,
                 "phone_number": str(user.phone_number),
@@ -282,23 +413,12 @@ class ProfileImageUpdate(APIView):
         user = User.objects.filter(id=payload['id']).first()
         serializer = UpdateProfileImageSerializer(data=request.data)
         if serializer.is_valid():
-            file = request.FILES['profile_img_url']
 
-            #----------------------upload to aws--------------------
-            s3 = boto3.client('s3', region_name='eu-west-3')
-            BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
-            if str(user.profile_image).startswith("https://vifbox-backend.s3.amazonaws.com"):
-                file_aws_name = user.profile_image.split("?")[0].split("amazonaws.com/")[1] #"profile_pics/img_"+timestr
-            else:
-                timestr = time.strftime("%Y%m%d%H%M%S")
-                ext = "."+file.name.split(".")[-1]
-                file_aws_name = "profile_pics/img_"+timestr+ext
-            s3.upload_fileobj(file, BUCKET_NAME, file_aws_name)
-            img_url = VifUtils.create_presigned_url(bucket_name=settings.BUCKET_NAME, region_name='eu-west-3', object_name=file_aws_name, expiration=604000)
-            #------------------------------------------
+            file = request.FILES['profile_img_url']
+            utls_cls = VifUtils()
+            img_url = utls_cls.aws_upload_file(user=user, file=file)
 
             profile_title = request.data["profile_title"]
-            # user.profile_image = file
             user.profile_image = img_url
             user.profile_title = profile_title
             user.save()
@@ -307,7 +427,7 @@ class ProfileImageUpdate(APIView):
                 'code': status.HTTP_200_OK,
                 'message': 'Profile image and title updated successfully',
                 'data': {
-                    "profile_image": user.profile_image,  # user.profile_image.url
+                    "profile_image": img_url,
                     "profile_title": user.profile_title
                 }
             }
@@ -355,6 +475,10 @@ class SettingsView(APIView):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         notification = UserNotification.objects.filter(notification_user=user)
+        prf_img = user.get_presigned_url_img() 
+        if user.profile_image != prf_img:
+            user.profile_image = prf_img
+            user.save()
         kys = ("from", "desc", "url", "date") 
         notf = [{kys[0]: nt.notification_from, kys[1]: nt.notification_text, kys[2]: nt.notification_url, kys[3]: nt.created_at} for nt in notification] 
         response = {
@@ -363,7 +487,7 @@ class SettingsView(APIView):
             'data': {
                 "name": user.name,
                 "username": user.username,
-                "profile_img_url": user.profile_image,
+                "profile_img_url": prf_img,
                 "is_verified": user.is_verified,
                 "notification": notf
             }
@@ -429,7 +553,7 @@ class ResetPasswordView(APIView):
                 token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
                 absurl = os.environ.get("front_domain") + "/new-password/?token=" + token
                 email_body = 'Hi '+ user.name + ' Use the link below to Change your password\n' + absurl
-                data = {'email_body': email_body, 'email_subject': 'Vifbox Reset password', "to_email": user.email}
+                data = {'email_body': email_body, 'email_subject': 'Vifbox Reset password', "to_email": [user.email]}
                 Thread(target=VifUtils.send_email, args=(data,)).start()
                 response = {
                     'status': 'success',
@@ -490,60 +614,104 @@ class NewPassView(APIView):
             raise AuthenticationFailed(response)
 
 
-class SocialAuth(APIView):
-    def post(self, request):
-        serializer = SocialAuthSerializer(data=request.data)
-        if serializer.is_valid():
-            social_user = User.objects.filter(email=request.data["email"])
-            if social_user:
-                payload_access = {
-                    'id': social_user.first().id,
-                    'iat': datetime.datetime.utcnow(),
-                    'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-                }
-                payload_refresh = {
-                    'id': social_user.first().id,
-                    'iat': datetime.datetime.utcnow(),
-                    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-                }
-                access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
-                refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
-                return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
-            else:
-                try:
-                    user_data = serializer.data
-                    username =  VifUtils.generate_username(request.data["name"])
-                    if user_data["profile_image"] == "" or user_data["profile_image"] is None:
-                        user_data["profile_image"] = "https://vifbox.org/api/media/default.jpg"
-                    user = User.objects.create(username=username, email=user_data["email"], name=request.data["name"], profile_image=user_data["profile_image"], social_id=user_data["social_id"])
-                    payload_access = {
-                        'id': user.id,
-                        'iat': datetime.datetime.utcnow(),
-                        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-                    }
-                    payload_refresh = {
-                        'id': user.id,
-                        'iat': datetime.datetime.utcnow(),
-                        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-                    }
-                    access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
-                    refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
-                    return Response({"type": "signup", "access": access_token, "refresh": refresh_token})
-                except:
-                    response = {
-                        'status': 'error',
-                        'code': status.HTTP_400_BAD_REQUEST,
-                        'message': 'Bad request.'
-                    }
-                    return Response(response, status.HTTP_400_BAD_REQUEST)
-        else:
-            err = list(serializer.errors.items())
-            response = {
+
+def permission_authontication_jwt(request):
+    try:
+        token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except jwt.DecodeError:
+        response = {
                 'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
-                'message': '(' + err[0][0] + ') ' + err[0][1][0]
+                'code': status.HTTP_403_FORBIDDEN,
+                'message': 'Token Expired!'
             }
-            return Response(response, status.HTTP_400_BAD_REQUEST)
+        raise AuthenticationFailed(response)
+    except jwt.ExpiredSignatureError:
+        response = {
+                'status': 'error',
+                'code': status.HTTP_403_FORBIDDEN,
+                'message': UNAUTHONTICATED
+            }
+        raise AuthenticationFailed(response)
+    except KeyError:
+        response = {
+                'status': 'error',
+                'code': status.HTTP_403_FORBIDDEN,
+                'message': 'Invalid AUTHORIZATION!'
+            }
+        raise AuthenticationFailed(response)
+    return payload
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# class SocialAuth(APIView):
+#     def post(self, request):
+#         serializer = SocialAuthSerializer(data=request.data)
+#         if serializer.is_valid():
+#             social_user = User.objects.filter(email=request.data["email"])
+#             if social_user:
+#                 payload_access = {
+#                     'id': social_user.first().id,
+#                     'iat': datetime.datetime.utcnow(),
+#                     'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+#                 }
+#                 payload_refresh = {
+#                     'id': social_user.first().id,
+#                     'iat': datetime.datetime.utcnow(),
+#                     'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+#                 }
+#                 access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+#                 refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+#                 return Response({"type": "signin", "access": access_token, "refresh": refresh_token})
+#             else:
+#                 try:
+#                     user_data = serializer.data
+#                     username =  VifUtils.generate_username(request.data["name"])
+#                     if user_data["profile_image"] == "" or user_data["profile_image"] is None:
+#                         user_data["profile_image"] = "https://vifbox.org/api/media/default.jpg"
+#                     user = User.objects.create(username=username, email=user_data["email"], name=request.data["name"], profile_image=user_data["profile_image"], social_id=user_data["social_id"])
+#                     payload_access = {
+#                         'id': user.id,
+#                         'iat': datetime.datetime.utcnow(),
+#                         'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+#                     }
+#                     payload_refresh = {
+#                         'id': user.id,
+#                         'iat': datetime.datetime.utcnow(),
+#                         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+#                     }
+#                     access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+#                     refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
+#                     return Response({"type": "signup", "access": access_token, "refresh": refresh_token})
+#                 except:
+#                     response = {
+#                         'status': 'error',
+#                         'code': status.HTTP_400_BAD_REQUEST,
+#                         'message': 'Bad request.'
+#                     }
+#                     return Response(response, status.HTTP_400_BAD_REQUEST)
+#         else:
+#             err = list(serializer.errors.items())
+#             response = {
+#                 'status': 'error',
+#                 'code': status.HTTP_400_BAD_REQUEST,
+#                 'message': '(' + err[0][0] + ') ' + err[0][1][0]
+#             }
+#             return Response(response, status.HTTP_400_BAD_REQUEST)
 
 
 # class GithubInfo(APIView):
@@ -579,32 +747,3 @@ class SocialAuth(APIView):
 #         access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
 #         refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY, algorithm='HS256')
 #         return Response({"access": access_token, "refresh": refresh_token})
-
-
-
-def permission_authontication_jwt(request):
-    try:
-        token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-    except jwt.DecodeError:
-        response = {
-                'status': 'error',
-                'code': status.HTTP_403_FORBIDDEN,
-                'message': 'Token Expired!'
-            }
-        raise AuthenticationFailed(response)
-    except jwt.ExpiredSignatureError:
-        response = {
-                'status': 'error',
-                'code': status.HTTP_403_FORBIDDEN,
-                'message': UNAUTHONTICATED
-            }
-        raise AuthenticationFailed(response)
-    except KeyError:
-        response = {
-                'status': 'error',
-                'code': status.HTTP_403_FORBIDDEN,
-                'message': 'Invalid AUTHORIZATION!'
-            }
-        raise AuthenticationFailed(response)
-    return payload

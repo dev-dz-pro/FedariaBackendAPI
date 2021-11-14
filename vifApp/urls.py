@@ -1,8 +1,8 @@
 from django.urls import path, include
 from .views import (RegisterView, LoginView, HomeView,
                     SettingsView, ProfileView, EmailVerifyView, 
-                    ResetPasswordView, NewPassView, ProfileInfoUpdate, EmailVerifyResendView, SocAuthTest,
-                    ProfileImageUpdate, SettingsInfoUpdate, SocialAuth, TokenRefreshView, ProfileSetCompanyUpdate)
+                    ResetPasswordView, NewPassView, ProfileInfoUpdate, EmailVerifyResendView, Google_SocAuthTest, Gitlab_SocAuthTest,
+                    ProfileImageUpdate, SettingsInfoUpdate, TokenRefreshView, ProfileSetCompanyUpdate, Github_SocAuthTest)
 
 
 urlpatterns = [
@@ -27,10 +27,12 @@ urlpatterns = [
     path('password/reset/confirm/', NewPassView.as_view(), name="pass-email-verify"),
 
     # path('github-auth/', GithubInfo.as_view(), name="github-info"),
-    path('social_auth/', SocialAuth.as_view(), name="social-auth"),
+    # path('social_auth/', SocialAuth.as_view(), name="social-auth"),
 
     
-    path('social_auth_test/', SocAuthTest.as_view(), name="social-auth-test"),
+    path('social_auth_google/', Google_SocAuthTest.as_view(), name="social-auth-google"),
+    path('social_auth_github/', Github_SocAuthTest.as_view(), name="social-auth-github"),
+    path('social_auth_gitlab/', Gitlab_SocAuthTest.as_view(), name="social-auth-gitlab"),
     
 
     path('dash/', include('kanban.urls')),
