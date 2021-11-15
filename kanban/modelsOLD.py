@@ -5,46 +5,38 @@ import datetime
 import uuid
 
 
-class Workspace(models.Model):
-    workspace_user = models.ForeignKey(User, on_delete=models.CASCADE)
-    workspace_name = models.CharField(max_length=100)
-    workspace_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
-    work_email = models.EmailField(max_length=100)
-    class Meta:
-        unique_together = ('workspace_name', 'workspace_user') 
-    def __str__(self):
-        return self.workspace_name + "  ("+  self.workspace_user.email + ")"
 
 class Portfolio(models.Model):
-    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE)
+    portfolio_user = models.ForeignKey(User, on_delete=models.CASCADE)
     portfolio_name = models.CharField(max_length=50)
-    portfolio_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     pined_portfolio = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
-        unique_together = ('portfolio_name', 'workspace') 
+        unique_together = ('portfolio_name', 'portfolio_user') 
     def was_published_today(self):
         return self.created_at >= timezone.now() - datetime.timedelta(days=1)
     def __str__(self):
-        return self.portfolio_name + "  ("+  self.workspace.workspace_name + ")  -  ("+  self.workspace.workspace_user.email + ")"
+        return self.portfolio_name + " | "+  self.portfolio_user.username
 
 
 class Project(models.Model):
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE)
     name = models.CharField(max_length=50) 
-    project_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     invited_users = models.JSONField(null=True)
+    project_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     project_description = models.CharField(max_length=250)
     pined_project = models.BooleanField(default=False)
     AGILE_CHOICES = [('Scrum', 'Scrum'), ('Kanban', 'Kanban')]
     agile_framwork = models.CharField(max_length=6, choices=AGILE_CHOICES, default='Kanban') 
+    # product_owner = models.EmailField(max_length=254, blank=True)
+    # scrum_master = models.EmailField(max_length=254, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         unique_together = ('name', 'portfolio')
     def was_published_today(self):
         return self.created_at >= timezone.now() - datetime.timedelta(days=1)
     def __str__(self):
-        return self.name + " | "+  self.portfolio.portfolio_name + " | "+  self.portfolio.workspace.workspace_user.username
+        return self.name + " | "+  self.portfolio.portfolio_name + " | "+  self.portfolio.portfolio_user.username
 
 
 def board_default():
@@ -63,15 +55,13 @@ class Board(models.Model):
 
 class InvitedProjects(models.Model):
     iuser = models.ForeignKey(User, on_delete=models.CASCADE)
-    inviter_project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='+')
-    inviter = models.EmailField(max_length=100) 
-    workspace_uid = models.UUIDField(editable=False) 
-    portfolio_uid = models.UUIDField(editable=False)
-    project_uid = models.UUIDField(editable=False)
+    inviter = models.EmailField(max_length=100)
+    project = models.CharField(max_length=101)
+    project_uid = models.CharField(max_length=150, null=True)
     class Meta:
-        unique_together = ('iuser', 'inviter', 'workspace_uid', 'portfolio_uid', 'project_uid')
+        unique_together = ('iuser', 'inviter', 'project')
     def __str__(self):
-        return self.iuser.username + "  (" + self.iuser.email + ")    --> Invitation from  (" + self.inviter + ")"
+        return self.iuser.username + "  (" + self.iuser.email + ")  -> Invitation from  (" + self.inviter + ")  ->  (" + self.project + ")"
 
 
 
