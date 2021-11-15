@@ -333,7 +333,7 @@ class GetAllProjects(APIView):
             data["my_projects"] = my_projects
         invited_projects = InvitedProjects.objects.filter(iuser=user)
         if invited_projects: 
-            invited_prj_list = [{"portfolio_name": prj.portfolio.portfolio_name, "project_name": prj.name, "workspace_uid": prj.portfolio.workspace.workspace_uuid, "portfolio_uid": prj.portfolio.portfolio_uuid, "project_uid": prj.project_uuid, "Pined": prj.pined_project} for prj in invited_projects]
+            invited_prj_list = [{"portfolio_name": prj.inviter_project.portfolio.portfolio_name, "project_name": prj.inviter_project.name, "workspace_uid": prj.inviter_project.portfolio.workspace.workspace_uuid, "portfolio_uid": prj.inviter_project.portfolio.portfolio_uuid, "project_uid": prj.inviter_project.project_uuid, "Pined": prj.inviter_project.pined_project} for prj in invited_projects]
             data["invited_projects"] = invited_prj_list
         response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'All Projects', 'data': data}
         return Response(response)
