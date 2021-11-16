@@ -299,8 +299,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     project_url = f"http://localhost:8000/api/dash/workspaces/{self.ws}/portfolios/{self.pf}/projects/{self.pj}/"  # will change to front
                     email_body = f'Hi, you have been invited by {self.user.name} ({self.user.email}) to the project ({project_url}).'
                     invusrs.append(('you have been invited to project', email_body, settings.EMAIL_HOST_USER, [invited_user.email]))
-                    prj = Project.objects.filter(portfolio__workspace__workspace_uuid=self.ws, portfolio__portfolio_uuid=self.pf, project_uuid=self.pj).first()
-                    invprj.append(InvitedProjects(iuser=invited_user, inviter_project=prj, inviter=self.user.email, workspace_uid=self.ws, portfolio_uid=self.pf, project_uid=self.pj))
+                    prj = Project.objects.filter(portfolio__workspace__workspace_user=self.project_owner_user, portfolio__workspace__workspace_uuid=self.ws, portfolio__portfolio_uuid=self.pf, project_uuid=self.pj).first()
+                    invprj.append(InvitedProjects(iuser=invited_user, inviter_project=prj, workspace_uid=self.ws, portfolio_uid=self.pf, project_uid=self.pj))  # , inviter=self.user.email
                     ntfs.append(UserNotification(notification_user=invited_user, notification_text=email_body, notification_from=self.user, notification_url=project_url))
         if invusrs:
             InvitedProjects.objects.bulk_create(invprj)

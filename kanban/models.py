@@ -64,14 +64,14 @@ class Board(models.Model):
 class InvitedProjects(models.Model):
     iuser = models.ForeignKey(User, on_delete=models.CASCADE)
     inviter_project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='+')
-    inviter = models.EmailField(max_length=100) 
+    # inviter = models.EmailField(max_length=100) 
     workspace_uid = models.UUIDField(editable=False) 
     portfolio_uid = models.UUIDField(editable=False)
     project_uid = models.UUIDField(editable=False)
     class Meta:
-        unique_together = ('iuser', 'inviter', 'workspace_uid', 'portfolio_uid', 'project_uid')
+        unique_together = ('iuser', 'inviter_project') # , 'workspace_uid', 'portfolio_uid', 'project_uid'
     def __str__(self):
-        return self.iuser.username + "  (" + self.iuser.email + ")    --> Invitation from  (" + self.inviter + ")"
+        return self.iuser.email + "    --> Invitation from  (" + self.inviter_project.portfolio.workspace.workspace_user.email + ")    --> Project  (" + self.inviter_project.name + ")"
 
 
 

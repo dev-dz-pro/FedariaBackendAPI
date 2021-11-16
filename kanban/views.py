@@ -23,8 +23,7 @@ class AddGetWorkspaces(APIView):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         workspaces = Workspace.objects.filter(workspace_user=user)
-        response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my workspaces', 
-                    'data': WorkspaceSerializer(workspaces, many=True).data}
+        response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my workspaces', 'data': WorkspaceSerializer(workspaces, many=True).data}
         return Response(response)
 
 
@@ -60,7 +59,7 @@ class SetGetWorkspace(APIView):
             else:
                 response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace not exists.', 'data': []}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception:
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad_request', 
                         'data': []}
             return Response(response, status.HTTP_400_BAD_REQUEST)
@@ -80,7 +79,7 @@ class SetGetWorkspace(APIView):
             else:
                 response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace not exists.', 'data': []}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception:
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad_request', 
                         'data': []}
             return Response(response)
@@ -98,7 +97,7 @@ class SetGetWorkspace(APIView):
             else:
                 response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace not exists.', 'data': []}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
-        except Exception as e:  
+        except Exception:  
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad_request', 'data': []}
             return Response(response)
 
@@ -113,14 +112,18 @@ class AddGetPortfolios(APIView):
         user = User.objects.filter(id=payload['id']).first()
         try:
             portfolios = Portfolio.objects.filter(workspace__workspace_uuid=workspace_uid, workspace__workspace_user=user)
-            data = [{"Portfolio Name": nt.portfolio_name, 
-                    "Portfolio uid": nt.portfolio_uuid,
-                    "Created at": nt.created_at,
-                    "Pined": nt.pined_portfolio,
-                    "projects": ProjectSerializer(nt.project_set.all(), many=True).data} 
-                    for nt in portfolios] 
-            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my Portfolios', 'data': data}
-            return Response(response)
+            if portfolios:
+                data = [{"Portfolio Name": nt.portfolio_name, 
+                        "Portfolio uid": nt.portfolio_uuid,
+                        "Created at": nt.created_at,
+                        "Pined": nt.pined_portfolio,
+                        "projects": ProjectSerializer(nt.project_set.all(), many=True).data} 
+                        for nt in portfolios] 
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my Portfolios', 'data': data}
+                return Response(response)
+            else:
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Portfolios not exists.', 'data': []}
+                return Response(response, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad_request', 'data': []}
             return Response(response, status.HTTP_400_BAD_REQUEST)
@@ -154,18 +157,13 @@ class SetGetPortfolio(APIView):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         try:
-            workspace = Workspace.objects.filter(workspace_user=user, workspace_uuid=workspace_uid).first()
-            if workspace:
-                portfolio = Portfolio.objects.filter(workspace=workspace, portfolio_uuid=portfolio_uid).first()
-                if portfolio:
-                    response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my portfolio', 
-                                'data': PortfolioSerializer(portfolio).data}
-                    return Response(response)
-                else:
-                    response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Portfolio not exists.', 'data': []}
-                    return Response(response, status.HTTP_400_BAD_REQUEST)
+            portfolio = Portfolio.objects.filter(workspace__workspace_user=user, workspace__workspace_uuid=workspace_uid, portfolio_uuid=portfolio_uid).first()
+            if portfolio:
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my portfolio', 
+                            'data': PortfolioSerializer(portfolio).data}
+                return Response(response)
             else:
-                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace not exists.', 'data': []}
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Portfolio or workspace not exists.', 'data': []}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad_request', 
@@ -228,7 +226,6 @@ class PinPortfolio(APIView):
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': "You cant't pin more then 3 portfolios."}
             return Response(response, status.HTTP_400_BAD_REQUEST)
         
-
         portfolio = Portfolio.objects.filter(workspace__workspace_user=user, workspace__workspace_uuid=workspace_uid, 
                                             portfolio_uuid=portfolio_uid).first()
         if portfolio:
@@ -255,29 +252,20 @@ class GetProject(APIView):
         user = User.objects.filter(id=payload['id']).first()
 
         # get current user project
-        project = Project.objects.filter(portfolio__workspace__workspace_user=user, 
-                                    portfolio__workspace__workspace_uuid=workspace_uid,
-                                    portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
+        project = Project.objects.filter(portfolio__workspace__workspace_user=user, portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
         if project:
-            data = {"Project Name": project.name, "Project Description": project.project_description,
-                    "Agile Framwork": project.agile_framwork, "Project ID":  project.project_uuid,
-                    "boards":  BoardSerializer(project.board_set.all(), many=True).data}  
+            data = {"Project Name": project.name, "Project Description": project.project_description, "Agile Framwork": project.agile_framwork, 
+                    "Project ID":  project.project_uuid, "boards":  BoardSerializer(project.board_set.all(), many=True).data}  
             response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Project Details', 'data': data}
             return Response(response)
 
         # get inviter project
         invited_project = InvitedProjects.objects.filter(iuser=user, workspace_uid=workspace_uid, portfolio_uid=portfolio_uid, project_uid=project_uid).first()
         if invited_project:
-            user_inviter = User.objects.filter(email=invited_project.inviter, workspace__workspace_uuid=workspace_uid,
-                                                workspace__portfolio__portfolio_uuid=portfolio_uid,
-                                                workspace__portfolio__project__project_uuid=project_uid).first()
-            project = Project.objects.filter(portfolio__workspace__workspace_user=user_inviter, 
-                                            portfolio__workspace__workspace_uuid=workspace_uid, 
-                                            portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
+            project = invited_project.inviter_project
             if project:
-                data = {"Project Name": project.name, "Project Description": project.project_description,
-                        "Agile Framwork": project.agile_framwork, "Project ID":  project.project_uuid,
-                        "boards":  BoardSerializer(project.board_set.all(), many=True).data}  
+                data = {"Project Name": project.name, "Project Description": project.project_description, "Agile Framwork": project.agile_framwork, 
+                        "Project ID":  project.project_uuid, "boards":  BoardSerializer(project.board_set.all(), many=True).data}  
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Project Details', 'data': data}
                 return Response(response)
                 
@@ -354,11 +342,8 @@ class CreateProject(APIView):
                         prdowner_scrummster_json[user_data["productowner"]] = {"profile_img": "https://vifbox.org/api/media/default.jpg", "role": "Product owner"}
                     if user_data["scrummaster"]:
                         prdowner_scrummster_json[user_data["scrummaster"]] = {"profile_img": "https://vifbox.org/api/media/default.jpg", "role": "Scrum master"}
-                    prj_obj = Project.objects.create(portfolio=portfolio, name=user_data["name"], 
-                                            project_description=user_data["projectdescription"],
-                                            agile_framwork=user_data["agileframwork"],
-                                            invited_users=prdowner_scrummster_json
-                                            )
+                    prj_obj = Project.objects.create(portfolio=portfolio, name=user_data["name"], project_description=user_data["projectdescription"],
+                                            agile_framwork=user_data["agileframwork"], invited_users=prdowner_scrummster_json)
                     Thread(target=self.invite_users_email, args=(workspace_uid, portfolio_uid, prj_obj.project_uuid, user, [{"email": user_data["productowner"], "role": "Project manager"}, {"email": user_data["scrummaster"], "role": "Scrum master"}])).start()
                     response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'({user_data["name"]}) project has been created.', "data": ProjectSerializer(prj_obj).data}
                     return Response(response)
@@ -382,8 +367,8 @@ class CreateProject(APIView):
                     project_url = f"http://localhost:8000/api/dash/workspaces/{ws}/portfolios/{pf}/projects/{pj}/"  # will change to front
                     email_body = f'Hi, you have been invited by {usr.name} ({usr.email}) to the project ({project_url}).'
                     invusrs.append(('you have been invited to project', email_body, settings.EMAIL_HOST_USER, [invited_user.email]))
-                    prj = Project.objects.filter(portfolio__workspace__workspace_uuid=ws, portfolio__portfolio_uuid=pf, project_uuid=pj).first()
-                    invprj.append(InvitedProjects(iuser=invited_user, inviter_project=prj, inviter=usr.email, workspace_uid=ws, portfolio_uid=pf, project_uid=pj))
+                    prj = Project.objects.filter(portfolio__workspace__workspace_user=usr, portfolio__workspace__workspace_uuid=ws, portfolio__portfolio_uuid=pf, project_uuid=pj).first()
+                    invprj.append(InvitedProjects(iuser=invited_user, inviter_project=prj, workspace_uid=ws, portfolio_uid=pf, project_uid=pj))  # , inviter=usr.email
                     ntfs.append(UserNotification(notification_user=invited_user, notification_text=email_body, notification_from=usr, notification_url=project_url))
         if invusrs:
             InvitedProjects.objects.bulk_create(invprj)
@@ -488,7 +473,12 @@ def permission_authontication_jwt(request):
 
 
 
-
+# user_inviter = User.objects.filter(email=invited_project.inviter, workspace__workspace_uuid=workspace_uid,
+#                                                 workspace__portfolio__portfolio_uuid=portfolio_uid,
+#                                                 workspace__portfolio__project__project_uuid=project_uid).first()
+# project = Project.objects.filter(portfolio__workspace__workspace_user=user_inviter, 
+#                                 portfolio__workspace__workspace_uuid=workspace_uid, 
+#                                 portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
 
 
 # def get(self, request):
