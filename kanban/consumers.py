@@ -7,6 +7,7 @@ from vifApp.models import User, UserNotification
 from channels.db import database_sync_to_async
 from django.db.utils import IntegrityError
 import hashlib
+from datetime import datetime as dt
 from django.core.mail import send_mass_mail
 from django.conf import settings
 from vifApp.utils import VifUtils
@@ -70,6 +71,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     async def single_user_response(self, request_id, data):
         if request_id == "get-board":
             await self.get_board(request_id, data)
+        elif request_id == "get-board-tasks":
+            await self.get_board_tasks(request_id, data)
         elif request_id == "get-task":
             await self.get_task(request_id, data)
         elif request_id == "create-project":
@@ -80,6 +83,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.search_project(request_id, data)
         elif request_id == "search-boards":
             await self.search_boards(request_id, data)
+        elif request_id == "remove-user":
+            await self.remove_user(request_id, data)
         elif request_id == "change-user-role":
             await self.change_user_role(request_id, data)
         elif request_id == "delete-aws-file":
@@ -91,6 +96,10 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 is_updated = await self.create_task(request_id, data)
             elif request_id == "delete-task":
                 is_updated = await self.delete_task(request_id, data)
+            elif request_id == "rename-subtask" or request_id == "delete-subtask" or request_id == "add-subtask" or request_id == "set-subtask":
+                is_updated = await self.update_subtask(request_id, data)
+            elif request_id == "add-label" or request_id == "remove-label":
+                is_updated = await self.update_task_labels(request_id, data)
             elif request_id == "create-board":
                 is_updated = await self.create_board(request_id, data)
             elif request_id == "update-board":
@@ -101,6 +110,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 is_updated = await self.change_tasks_col(request_id, data)
             elif request_id == "add-col":
                 is_updated = await self.add_col(request_id, data)
+            elif request_id == "rename-col":
+                is_updated = await self.rename_col(request_id, data)
             elif request_id == "delete-col":
                 is_updated = await self.delete_col(request_id, data)
             elif request_id == "change-col-order":
@@ -223,6 +234,26 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You not allowed to invite users.'}
             return await self.send_json(response) 
 
+    
+    async def remove_user(self, request_id, data):
+        if self.project_owner_user == self.user:
+            project = await database_sync_to_async(self.get_project_db)(self.user) 
+            eml = data["email"]
+            invtdusr = await database_sync_to_async(InvitedProjects.objects.filter)(iuser__email=eml, inviter_project=project)
+            invtdusr = await sync_to_async(invtdusr.first)()
+            if eml in project.invited_users and invtdusr:
+                del project.invited_users[eml]
+                await database_sync_to_async(project.save)()
+                await database_sync_to_async(invtdusr.delete)()
+                response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': 'User removed seccessfuly', "data": []}
+                return await self.send_json(response)
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Email not exists.'}
+                return await self.send_json(response)
+        else:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You not allowed to delete users.'}
+            return await self.send_json(response)
+
 
     async def search_project(self, request_id, data):
         try:
@@ -311,6 +342,97 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     '''
     Board Part
     '''
+
+    async def get_board_tasks(self, request_id, data):
+        try:
+            a = dt.strptime("10/12/13", "%m/%d/%y")
+            b = dt.strptime("10/15/13", "%m/%d/%y")
+            a > b
+            board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+            if board:
+                query = data["filters"]
+                results = []
+
+                if not query:  
+                    for x in board.board:
+                        tsks = list(x.values())[0]
+                        for t in tsks:
+                            results.append(t)
+
+                else:
+                    for x in board.board:
+                        tsks = list(x.values())[0]
+                        for y in tsks:
+                            tsk = self.get_stages_task_filter(query, tsk=y, col=x)
+                            if tsk:
+                                tsk = self.get_stories_task_filter(query, tsk=tsk)
+                                if tsk:
+                                    tsk = self.get_dates_task_filter(tsk=tsk, query=query)
+                                    if tsk:
+                                        tsk = self.get_labels_task_filter(tsk=tsk, query=query)
+                            if tsk:
+                                results.append(tsk)
+
+
+                response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'({data["name"]}) Kanban board info.', "data": {"Tasks": results}}
+                await self.send_json(response)
+                return True
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board not exists.'}
+                await self.send_json(response) 
+                return False
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            await self.send_json(response)
+            return False
+
+    def get_stages_task_filter(self, query, tsk, col):
+        if "stages" in query:
+            for z in query["stages"]:
+                if z in col and col[z]:
+                    return tsk
+        else:
+            return tsk
+
+
+    def get_stories_task_filter(self, query, tsk):
+        if "story" in query:
+            story = query["story"]
+            if story and story[0] == "+":
+                if tsk["story"] > int(story[1:]):
+                    return tsk
+            elif story and story[0] == "-":
+                if tsk["story"] < int(story[1:]):
+                    return tsk 
+            else:
+                if story and tsk["story"] == int(story):
+                    return tsk
+        else:
+            return tsk
+    
+    def get_dates_task_filter(self, query, tsk):
+        if "due_date" in query:
+            selected_date = query["due_date"]
+            if selected_date:
+                frm = selected_date["from"]
+                to = selected_date["to"]
+                frm = dt.strptime(frm, '%Y-%m-%d')
+                to = dt.strptime(to, '%Y-%m-%d')
+                due_date = dt.strptime(tsk["due_date"].split("T")[0], '%Y-%m-%d')
+                if frm <= due_date <= to:
+                    return tsk
+        else:
+            return tsk
+
+
+    def get_labels_task_filter(self, query, tsk):
+        if "labels" in query:
+            for z in query["labels"]:
+                if z in tsk["labels"]:
+                    return tsk
+        else:
+            return tsk
+
     async def get_board(self, request_id, data):
         try:
             board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
@@ -412,6 +534,23 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                                         prj__portfolio__portfolio_uuid=self.pf, prj__project_uuid=self.pj, name__contains=query)  
         return BPPSerializer(boards, many=True).data
 
+
+    # async def import_board(self, request_id, data):
+    #     try:
+    #         board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+    #         if board:
+    #             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board task has been created.'}
+    #             await self.send_json(response)
+    #             return True
+    #         else:
+    #             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board not exists.'}
+    #             await self.send_json(response) 
+    #             return False
+    #     except PermissionError as pe:
+    #         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+    #         await self.send_json(response)
+    #         return False
+
         
     async def add_col(self, request_id, data):
         try:
@@ -437,7 +576,37 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json(response)
             return False
             
+
+    async def rename_col(self, request_id, data):
+        try:
+            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager'])
+            colname = data["col_name"]
+            new_colname = data["new_name"]
+            if board:
+                for b in board.board:
+                    if colname in b:
+                        b[new_colname] = b[colname]
+                        del b[colname]
+                        break
+                else:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Column name not exists.'}
+                    await self.send_json(response)
+                    return False
+                await database_sync_to_async(self.save_db)(board)
+                response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'{colname} column has been renamed sucessfuly.'}
+                await self.send_json(response)
+                return True
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'board not exists.'}
+                await self.send_json(response)
+                return False
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            await self.send_json(response)
+            return False
         
+
+
     async def delete_col(self, request_id, data):
         try:
             board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)(data, self.user)
@@ -544,7 +713,13 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             if serializer.is_valid():
                 user_data = serializer.data
                 board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager', 'Scrum master']) # to set access_role_permissions later # board = await database_sync_to_async(self.get_board_db)(user_data, self.user)
-                my_task = {"name": user_data["name"], "files": data["files"], "assignees": data["assignees"], "story": data["story"], "due_date": data["due_date"]}
+                try:
+                    created_time, end_date = self.set_datetime_format(data["due_date"])
+                except ValueError as ve:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(ve)}
+                    await self.send_json(response)
+                    return False
+                my_task = {"name": user_data["name"], "files": data["files"], "assignees": data["assignees"], "subtasks": data["subtasks"], "labels": data["labels"], "story": data["story"], "created_at": created_time, "due_date": end_date}
                 if board:        
                     for i, d in enumerate(board.board):
                         if user_data["col"] in d:
@@ -573,6 +748,102 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json(response)
             return False
 
+    def set_datetime_format(self, due_date):
+        try:
+            dt.strptime(due_date.strip(), '%Y-%m-%d')
+        except ValueError:
+            raise ValueError('Incorrect data format, should be YYYY-MM-DD')
+        time_now = dt.now()
+        created_time = time_now.isoformat()
+        tm = created_time.split("T")[1]
+        due_date = due_date.strip() + "T" + tm
+        return created_time, due_date
+
+
+    async def update_subtask(self, request_id, data):
+        try:
+            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager', 'Scrum master']) # board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, self.user)
+            if board:
+                try:
+                    dict_col = board.board[data["col_index"]]
+                    col_name = list(dict_col.keys())[0]
+                    dict_task = board.board[data["col_index"]][col_name][int(data["task_index"])]
+                    if request_id == "delete-subtask" or request_id == "update-subtask":
+                        old_name = data["old_name"]
+                        if old_name in dict_task["subtasks"]:
+                            if request_id == "update-subtask":
+                                new_name = data["new_name"]
+                                dict_task["subtasks"][new_name] = dict_task["subtasks"][old_name]
+                            del dict_task["subtasks"][old_name]
+                        else:
+                            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The subtask not exists'}
+                            await self.send_json(response)
+                            return False
+                    elif request_id == "set-subtask":
+                        if data["name"] in dict_task["subtasks"]:
+                            dict_task["subtasks"][data["name"]] = data["is_done"]
+                        else:
+                            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The subtask not exists'}
+                            await self.send_json(response)
+                            return False
+                    elif request_id == "add-subtask":
+                        dict_task["subtasks"][data["name"]] = False
+                    else:
+                        response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Bad request.'}
+                        await self.send_json(response)
+                        return False
+                except (IndexError, KeyError):
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Bad request.'}
+                    await self.send_json(response)
+                    return False
+                await database_sync_to_async(self.save_db)(board)
+                response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The subtasks has been updated sucessfuly.'}
+                await self.send_json(response)
+                return True
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The board not exists'}
+                await self.send_json(response)
+                return False
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            await self.send_json(response)
+            return False
+
+
+    async def update_task_labels(self, request_id, data):
+        try:
+            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager', 'Scrum master']) # board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, self.user)
+            if board:
+                try:
+                    dict_col = board.board[data["col_index"]]
+                    col_name = list(dict_col.keys())[0]
+                    dict_task = board.board[data["col_index"]][col_name][int(data["task_index"])]
+                    if request_id == "add-label":
+                        dict_task["labels"].append(data["label"])
+                    elif request_id == "remove-label":
+                        if data["label"] in dict_task["labels"]:
+                            dict_task["labels"].remove(data["label"])
+                        else:
+                            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The label not exists'}
+                            await self.send_json(response)
+                            return False
+                except (IndexError, KeyError):
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Bad request.'}
+                    await self.send_json(response)
+                    return False
+                await database_sync_to_async(self.save_db)(board)
+                response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The labels has been updated sucessfuly.'}
+                await self.send_json(response)
+                return True
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The board not exists'}
+                await self.send_json(response)
+                return False
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            await self.send_json(response)
+            return False
+
 
     async def change_tasks_col(self, request_id, data):
         try:
@@ -582,26 +853,44 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 tasks_2_move = []
                 from_col = data["from_col"]
                 to_col = data["to_col"]
+                
                 # cut the tasks
+                if_from_col_there = False
                 for c in col_values:
                     if from_col in c:
                         if c[from_col]:
                             ids_list = data["tasks_ids"]
                             for i in ids_list:
                                 tasks_2_move.append(c[from_col].pop(int(i)))
+                            if_from_col_there = True
                             break
                         else:
                             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'No tasks to move.'}
                             await self.send_json(response)
                             return True
+
                 # paste the tasks
-                for cl in col_values:
+                if_to_col_there = False
+                for j, cl in enumerate(col_values):
                     if to_col in cl:
                         in_pos = data["in_pos"]
                         for t in tasks_2_move:
                             cl[to_col].insert(in_pos, t)
                             in_pos += 1
+                            time_now = dt.now() # This for Aging (card move to the second column) 
+                            if j == 1: 
+                                t["first_move_date"] = time_now.isoformat()
+                            elif j > 1:
+                                t["last_move_date"] = time_now.isoformat()
+                        if_to_col_there = True
                         break
+
+                # check if col name exists
+                if not if_from_col_there or not if_to_col_there:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Column name not exists.'}
+                    await self.send_json(response)
+                    return False
+
                 await database_sync_to_async(self.save_db)(board)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Tasks moved successfuly.', "data": board.board} # to return the full project
                 await self.send_json(response)
@@ -747,3 +1036,81 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             else:
                 raise PermissionError('You dont have assecc to this project')
         return board
+
+
+# query = data["filters"]
+                # if "story" in query:
+                #     story = query["story"]
+                # results = []
+                # for x in board.board:
+                #     tsks = list(x.values())[0]
+                #     for y in tsks:
+                #         found = False 
+                #         if "story" in query:
+                #             if story and story[0] == "+":
+                #                 if y["story"] > int(story[1:]):
+                #                     results.append(y)
+                #                     found = True 
+                #             elif story and story[0] == "-":
+                #                 if y["story"] < int(story[1:]):
+                #                     results.append(y)
+                #                     found = True 
+                #             else:
+                #                 if story and y["story"] == int(story):
+                #                     results.append(y)
+                #                     found = True 
+                #         if "stages" in query and not found:
+                #             for z in query["stages"]:
+                #                 if z in x and x[z]:
+                #                     results.append(y)
+                #                     found = True 
+                #                     break
+                #         if "due_date" in query and not found:
+                #             selected_date = query["due_date"]
+                #             if selected_date:
+                #                 query_date = dt.strptime(selected_date, '%Y-%m-%d')
+                #                 due_date = dt.strptime(y["due_date"].split("T")[0], '%Y-%m-%d')
+                #                 if due_date == query_date:
+                #                     results.append(y)
+                #                     found = True
+                #         if "labels" in query and not found:
+                #             for z in query["labels"]:
+                #                 if z in y["labels"]:
+                #                     results.append(y)
+                #                     found = True
+                #                     break
+                # else:
+                #     if not found:
+                #         for x in board.board:
+                #             tsks = list(x.values())[0]
+                #             for t in tsks:
+                #                 results.append(t)
+
+
+# if "stages" in query:
+                #     for x in board.board:
+                #         for y in query["stages"]:
+                #             if y in x and x[y]:
+                #                 results.append(x[y])
+                # if "due_date" in query:
+                #     query_date = dt.strptime(query["due_date"], '%Y-%m-%d')
+                #     for x in board.board:
+                #         tsks = list(x.values())[0]
+                #         for y in tsks:
+                #             due_date = dt.strptime(y["due_date"].split("T")[0], '%Y-%m-%d')
+                #             if due_date == query_date:
+                #                 results.append(x)
+                # if "story" in query:
+                #     story = query["story"]
+                #     for x in board.board:
+                #         tsks = list(x.values())[0]
+                #         for y in tsks:
+                #             if story[0] == "+":
+                #                 if y["story"] > int(story[1:]):
+                #                     results.append(y)
+                #             elif story[0] == "-":
+                #                 if y["story"] < int(story[1:]):
+                #                     results.append(y)
+                #             else:
+                #                 if y["story"] == int(story):
+                #                     results.append(y)

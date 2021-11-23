@@ -188,13 +188,20 @@ GITLAB_SECRET_KEY = os.environ.get('GITLAB_SECRET_KEY')
 # DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 # SERVER_EMAIL = EMAIL_HOST_USER
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp-mail.outlook.com'
-EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
-EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
-EMAIL_PORT = 25
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp-mail.outlook.com'
+# EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
+# EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
+# EMAIL_PORT = 25
+# EMAIL_USE_TLS = True
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+# SERVER_EMAIL = EMAIL_HOST_USER
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-SERVER_EMAIL = EMAIL_HOST_USER
+EMAIL_PORT = 587
+EMAIL_HOST_USER = os.environ.get('gm_user') 
+EMAIL_HOST_PASSWORD = os.environ.get('gm_pass') 
 
 
