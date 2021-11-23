@@ -220,8 +220,8 @@ class Github_SocAuthTest(APIView):
         code = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
         endpoint = "https://github.com/login/oauth/access_token"
         data = {"code": code,
-                "client_id": settings.GITHUB_CLIENT_ID,
-                "client_secret": settings.GITHUB_SECRET_KEY,
+                "client_id": "65ad233b6c86eb522646", # settings.GITHUB_CLIENT_ID,
+                "client_secret": "b8b1b739cf432dd8772bb31e6ea01e33e4c12dc4", # settings.GITHUB_SECRET_KEY,
                 "redirect_uri": "http://localhost:3000/social_auth"}
         social_res = requests.post(endpoint, data=data)
         if 'error' in parse_qs(social_res.text):
@@ -229,7 +229,6 @@ class Github_SocAuthTest(APIView):
             return Response(response, status.HTTP_400_BAD_REQUEST)
         else:
             access_token = parse_qs(social_res.text)['access_token'][0]
-
         endpoint_user = "https://api.github.com/user"
         endpoint_email = "https://api.github.com/user/emails"
         headers = {"Authorization": f"token {access_token}"}
@@ -270,8 +269,8 @@ class Gitlab_SocAuthTest(APIView):
         code = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
         endpoint = "https://gitlab.com/oauth/token"
         data = {"code": code,
-                "client_id": settings.GITLAB_CLIENT_ID,
-                "client_secret": settings.GITLAB_SECRET_KEY,
+                "client_id": "b58e0a039e3e7c9ee9eeeaed91471614ac0c2210768d4dc65a95243098f7da61", #settings.GITLAB_CLIENT_ID,
+                "client_secret": "37a2a9cfcda607228ae90eeb3d4df0d72459dded55035a8df4197d9cad550ee6", #settings.GITLAB_SECRET_KEY,
                 "grant_type": "authorization_code",
                 "redirect_uri": "http://localhost:3000/social_auth"}
         social_res = requests.post(endpoint, data=data).json()
