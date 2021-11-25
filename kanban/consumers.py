@@ -1,8 +1,8 @@
 import json
 from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from .serializers import TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer
-from .models import Portfolio, Project, Board, InvitedProjects
+from .serializers import TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer, BoardActivitiesSerializer
+from .models import Portfolio, Project, Board, InvitedProjects, BoardActivities
 from vifApp.models import User, UserNotification
 from channels.db import database_sync_to_async
 from django.db.utils import IntegrityError
@@ -91,6 +91,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.delete_aws_file(request_id, data)
         elif request_id == "get-aws-file":
             await self.get_aws_file(request_id, data)
+        elif request_id == "get-project-activities":
+            await self.get_project_activities(request_id, data)
         else:
             if request_id == "create-task":
                 is_updated = await self.create_task(request_id, data)
@@ -132,61 +134,69 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     Project part
     '''
     async def create_project(self, request_id, data):
-        # roles and permissions part
-        current_user_role = None
-        if self.project_owner_user == self.user:
-            usr = self.user
-        else:
-            assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
-            if self.user.email in assignee:
-                current_user_role = assignee[self.user.email]["role"]
-                if current_user_role in ['Product owner', 'Project manager']:
-                    usr = self.project_owner_user
-                else:
-                    response = {'status': 'error', 'code': 403, 'request_id': request_id, 'message': 'You are not allowed to create project.'}
-                    return await self.send_json(response)
-            else:
-                response = {'status': 'error', 'code': 403, 'request_id': request_id, 'message': 'You dont have assecc to this project'}
-                return await self.send_json(response)
+        try:
+            # roles and permissions part
 
-        serializer = KanbanProjectSerializer(data=data)
-        if serializer.is_valid():
-            user_data = serializer.data
-            pfl = await database_sync_to_async(Portfolio.objects.filter)(
-                workspace__workspace_user=usr, 
-                workspace__workspace_uuid=self.ws, 
-                portfolio_uuid=self.pf
-            )
-            portfolio = await sync_to_async(pfl.first)()
-            try:
-                if portfolio:
-                    prdowner_scrummster_json = {}
-                    if current_user_role:
-                        prdowner_scrummster_json[self.user.email] = {"profile_img": self.user.profile_image, "role": current_user_role}
-                    if user_data["productowner"]:
-                        img = await database_sync_to_async(self.get_img_url_by_email)(user_data["productowner"])
-                        prdowner_scrummster_json[user_data["productowner"]] = {"profile_img": img, "role": "Product owner"}
-                    if user_data["scrummaster"]:
-                        img = await database_sync_to_async(self.get_img_url_by_email)(user_data["scrummaster"])
-                        prdowner_scrummster_json[user_data["scrummaster"]] = {"profile_img": img, "role": "Scrum master"}
-                    await database_sync_to_async(self.set_invited)([{"email": user_data["productowner"], "role": "Project manager"}, {"email": user_data["scrummaster"], "role": "Scrum master"}])
-                    await database_sync_to_async(Project.objects.create)(
-                        portfolio=portfolio, name=user_data["name"], 
-                        project_description=user_data["projectdescription"],
-                        agile_framwork=user_data["agileframwork"],
-                        invited_users=prdowner_scrummster_json
-                    )
-                    response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': f'({user_data["name"]}) Project has been created.', "data": []}
-                    return await self.send_json(response)
-                else:
-                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Portfolio not exists'}
+            # current_user_role = None
+            # if self.project_owner_user == self.user:
+            #     usr = self.user
+            # else:
+            #     assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
+            #     if self.user.email in assignee:
+            #         current_user_role = assignee[self.user.email]["role"]
+            #         if current_user_role in ['Product owner', 'Project manager']:
+            #             usr = self.project_owner_user
+            #         else:
+            #             response = {'status': 'error', 'code': 403, 'request_id': request_id, 'message': 'You are not allowed to create project.'}
+            #             return await self.send_json(response)
+            #     else:
+            #         response = {'status': 'error', 'code': 403, 'request_id': request_id, 'message': 'You dont have assecc to this project'}
+            #         return await self.send_json(response)
+
+            usr, current_user_role = await self.role_permission(access_role_permissions=['Product owner', 'Project manager'])
+
+            serializer = KanbanProjectSerializer(data=data)
+            if serializer.is_valid():
+                user_data = serializer.data
+                pfl = await database_sync_to_async(Portfolio.objects.filter)(
+                    workspace__workspace_user=usr, 
+                    workspace__workspace_uuid=self.ws, 
+                    portfolio_uuid=self.pf
+                )
+                portfolio = await sync_to_async(pfl.first)()
+                try:
+                    if portfolio:
+                        prdowner_scrummster_json = {}
+                        if current_user_role:
+                            prdowner_scrummster_json[self.user.email] = {"profile_img": self.user.profile_image, "role": current_user_role}
+                        if user_data["productowner"]:
+                            img = await database_sync_to_async(self.get_img_url_by_email)(user_data["productowner"])
+                            prdowner_scrummster_json[user_data["productowner"]] = {"profile_img": img, "role": "Product owner"}
+                        if user_data["scrummaster"]:
+                            img = await database_sync_to_async(self.get_img_url_by_email)(user_data["scrummaster"])
+                            prdowner_scrummster_json[user_data["scrummaster"]] = {"profile_img": img, "role": "Scrum master"}
+                        await database_sync_to_async(self.set_invited)([{"email": user_data["productowner"], "role": "Project manager"}, {"email": user_data["scrummaster"], "role": "Scrum master"}])
+                        await database_sync_to_async(Project.objects.create)(
+                            portfolio=portfolio, name=user_data["name"], 
+                            project_description=user_data["projectdescription"],
+                            agile_framwork=user_data["agileframwork"],
+                            invited_users=prdowner_scrummster_json
+                        )
+                        response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': f'({user_data["name"]}) Project has been created.', "data": []}
+                        return await self.send_json(response)
+                    else:
+                        response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Portfolio not exists'}
+                        return await self.send_json(response) 
+                except IntegrityError:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Project Already exist in the portfolio'}
                     return await self.send_json(response) 
-            except IntegrityError:
-                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Project Already exist in the portfolio'}
-                return await self.send_json(response) 
-        else:
-            err = list(serializer.errors.items())
-            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': '(' + err[0][0] + ') ' + err[0][1][0]}
+            else:
+                err = list(serializer.errors.items())
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': '(' + err[0][0] + ') ' + err[0][1][0]}
+                return await self.send_json(response)
+                
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 403, 'request_id': request_id, 'message': pe}
             return await self.send_json(response)
         
 
@@ -257,15 +267,20 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def search_project(self, request_id, data):
         try:
-            if self.project_owner_user == self.user:
-                data = await self.search_prj(data, usr=self.user)
-            else:
-                assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
-                if self.user.email in assignee:
-                    if assignee[self.user.email]["role"] in ['Product owner', 'Scrum master', 'Project manager', 'Team member']:
-                        data = await self.search_prj(data, usr=self.project_owner_user)
-                    else:
-                        raise PermissionError('You dont have permission')
+
+            # if self.project_owner_user == self.user:
+            #     data = await self.search_prj(data, usr=self.user)
+            # else:
+            #     assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
+            #     if self.user.email in assignee:
+            #         if assignee[self.user.email]["role"] in ['Product owner', 'Scrum master', 'Project manager', 'Team member']:
+            #             data = await self.search_prj(data, usr=self.project_owner_user)
+            #         else:
+            #             raise PermissionError('You dont have permission')
+
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member'])
+            data = await self.search_prj(data, usr=usr)
+
             if data:
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Search result', 'data': data}
                 return await self.send_json(response)
@@ -337,7 +352,55 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             InvitedProjects.objects.bulk_create(invprj)
             UserNotification.objects.bulk_create(ntfs)
             send_mass_mail(invusrs)
+    
 
+    async def get_project_activities(self, request_id, data):
+        try:
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
+            project = await database_sync_to_async(self.get_project_db)(usr)
+            if project:
+                data = await self.board_project_activities(project, data)
+                response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Project activities', 'data': data}
+                return await self.send_json(response)
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Project not exists.'}
+                return await self.send_json(response)
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            return await self.send_json(response)
+
+    @database_sync_to_async
+    def board_project_activities(self, project, data):
+        dct = {"board__prj": project}
+        if data["board"]:
+            dct["board__name"] = data["board"]
+        if data["type_of_activity"]:
+            dct["activity_type"] = data["type_of_activity"]
+        if data["user_email"]:
+            dct["activity_user_email"] = data["user_email"]
+        boards = BoardActivities.objects.filter(**dct) 
+        return BoardActivitiesSerializer(boards, many=True).data
+
+    
+    # async def export_activities(self, request_id, data):
+    #     try:
+    #         usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+    #         board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, usr=usr)
+    #         if board:
+    #             activities = await database_sync_to_async(BoardActivities.objects.filter)(board=board)
+    #             activities = await sync_to_async(activities.order_by)('-activity_date')
+    #             activities = await sync_to_async(activities.values)('activity_date', 'activity_type', 'activity_description')
+    #             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board task has been created.', 'data': activities}
+    #             await self.send_json(response)
+    #             return True
+    #         else:
+    #             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board not exists.'}
+    #             await self.send_json(response) 
+    #             return False
+    #     except PermissionError as pe:
+    #         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+    #         await self.send_json(response)
+    #         return False
 
     '''
     Board Part
@@ -348,7 +411,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             a = dt.strptime("10/12/13", "%m/%d/%y")
             b = dt.strptime("10/15/13", "%m/%d/%y")
             a > b
-            board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, usr=usr)
             if board:
                 query = data["filters"]
                 results = []
@@ -435,7 +499,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def get_board(self, request_id, data):
         try:
-            board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, usr=usr)
             if board:
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'({data["name"]}) Kanban board info.', "data": {"board": board.board}}
                 await self.send_json(response)
@@ -452,10 +517,13 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def update_board(self, request_id, data):
         try:
-            board = await self.role_permission({"board": data["old_name"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["old_name"]}, usr=usr)
             if board:
                 board.name = data["new_name"]
                 await database_sync_to_async(self.save_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="update-board", activity_description=f"Board name has been updated.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'({data["old_name"]}) Kanban board name updated.', "data": {"board": board.board}}
                 await self.send_json(response)
                 return True
@@ -475,7 +543,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 project = await database_sync_to_async(self.get_project_db)(self.user) 
             else:
                 project = await database_sync_to_async(self.get_project_db)(self.project_owner_user)
-            board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, usr=usr)
             if board:
                 response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board already exists.'}
                 await self.send_json(response) 
@@ -487,6 +556,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     await database_sync_to_async(self.db_create_board)(prj=project, name=f"kanban Board {board_count+1}")
                 else:
                     await database_sync_to_async(self.db_create_board)(prj=project, name=data["name"])
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="create-board", activity_description=f"New Board has been created.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board task has been created.'}
                 await self.send_json(response)
                 return True
@@ -498,9 +569,12 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def delete_board(self, request_id, data):
         try:
-            board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Project manager'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, usr=usr)
             if board:
                 await database_sync_to_async(self.delete_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="delete-board", activity_description=f"Board has been deleted.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'({data["name"]}) Kanban board deleted.'}
                 await self.send_json(response)
                 return True
@@ -534,27 +608,11 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                                         prj__portfolio__portfolio_uuid=self.pf, prj__project_uuid=self.pj, name__contains=query)  
         return BPPSerializer(boards, many=True).data
 
-
-    # async def import_board(self, request_id, data):
-    #     try:
-    #         board = await self.role_permission({"board": data["name"]}, access_role_permissions=['Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
-    #         if board:
-    #             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board task has been created.'}
-    #             await self.send_json(response)
-    #             return True
-    #         else:
-    #             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board not exists.'}
-    #             await self.send_json(response) 
-    #             return False
-    #     except PermissionError as pe:
-    #         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
-    #         await self.send_json(response)
-    #         return False
-
         
     async def add_col(self, request_id, data):
         try:
-            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager'])
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager'])
+            board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
             colname = data["colname"]
             if board:
                 if not any(colname in b for b in board.board):
@@ -564,6 +622,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     await self.send_json(response)
                     return False
                 await database_sync_to_async(self.save_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
+                                    activity_type="add-col", activity_description=f"New Column ({colname}) has been added.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'{colname} column has been added sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -579,7 +639,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def rename_col(self, request_id, data):
         try:
-            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager'])
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager'])
+            board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
             colname = data["col_name"]
             new_colname = data["new_name"]
             if board:
@@ -593,6 +654,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     await self.send_json(response)
                     return False
                 await database_sync_to_async(self.save_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
+                                    activity_type="rename-col", activity_description=f"Column ({colname}) has been renamed > {new_colname}.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'{colname} column has been renamed sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -609,7 +672,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def delete_col(self, request_id, data):
         try:
-            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)(data, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager'])
+            board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
             col_index = data["col_index"]
             if board:
                 try:
@@ -619,6 +683,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     await self.send_json(response)
                     return False
                 await database_sync_to_async(self.save_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
+                                    activity_type="delete-col", activity_description="A column has been deleted.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'The column has been deleted sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -634,13 +700,16 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def change_col_order(self, request_id, data):
         try:
-            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)(data, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager'])
+            board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
             col_index = data["col_index"]
             to_index = data["to_index"]
             if board:
                 col2changeorder = board.board.pop(col_index)
                 board.board.insert(to_index, col2changeorder)
                 await database_sync_to_async(self.save_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
+                                    activity_type="change-col-order", activity_description="A column order has been changed.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The column order has been changed sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -659,7 +728,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     '''
     async def get_task(self, request_id, data):
         try:
-            board = await self.role_permission({"board": data["board"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member']) # board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, usr=usr)
             if board:  
                 try:
                     col_values = board.board[data["col_index"]].values()
@@ -683,7 +753,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def delete_task(self, request_id, data): 
         try:
-            board = await self.role_permission({"board": data["board"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager', 'Scrum master'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, usr=usr)
             if board:
                 try:
                     dict_col = board.board[data["col_index"]]
@@ -694,6 +765,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     await self.send_json(response)
                     return False
                 await database_sync_to_async(self.save_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                activity_type="delete-task", activity_description=f"Task has been deleted.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The task has been deleted sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -712,21 +785,25 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             serializer = TaskSerializer(data=data)
             if serializer.is_valid():
                 user_data = serializer.data
-                board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager', 'Scrum master']) # to set access_role_permissions later # board = await database_sync_to_async(self.get_board_db)(user_data, self.user)
+                usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager', 'Scrum master'])
+                board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
                 try:
                     created_time, end_date = self.set_datetime_format(data["due_date"])
                 except ValueError as ve:
                     response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(ve)}
                     await self.send_json(response)
                     return False
-                my_task = {"name": user_data["name"], "files": data["files"], "assignees": data["assignees"], "subtasks": data["subtasks"], "labels": data["labels"], "story": data["story"], "created_at": created_time, "due_date": end_date}
+                task_title = user_data["name"]
+                my_task = {"name": task_title, "files": data["files"], "assignees": data["assignees"], "subtasks": data["subtasks"], "labels": data["labels"], "story": data["story"], "created_at": created_time, "due_date": end_date}
                 if board:        
                     for i, d in enumerate(board.board):
                         if user_data["col"] in d:
                             tasks_list = board.board[i][user_data["col"]]
                             tasks_list.append(my_task)
                             await database_sync_to_async(self.save_db)(board)
-                            await database_sync_to_async(self.notify_assignees)(data["assignees"], user_data["name"])
+                            await database_sync_to_async(self.notify_assignees)(data["assignees"], task_title)
+                            await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                activity_type="create-task", activity_description=f"({task_title}) Task has been created.")
                             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The task has been created.'}
                             await self.send_json(response)
                             return True
@@ -762,7 +839,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def update_subtask(self, request_id, data):
         try:
-            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager', 'Scrum master']) # board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager', 'Scrum master'])
+            board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
             if board:
                 try:
                     dict_col = board.board[data["col_index"]]
@@ -774,7 +852,13 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                             if request_id == "update-subtask":
                                 new_name = data["new_name"]
                                 dict_task["subtasks"][new_name] = dict_task["subtasks"][old_name]
-                            del dict_task["subtasks"][old_name]
+                                del dict_task["subtasks"][old_name]
+                                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="update-subtask", activity_description=f"Subtask name has been updated.")
+                            else:
+                                del dict_task["subtasks"][old_name]
+                                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="delete-subtask", activity_description=f"Subtask has been deleted.")
                         else:
                             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The subtask not exists'}
                             await self.send_json(response)
@@ -782,12 +866,16 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     elif request_id == "set-subtask":
                         if data["name"] in dict_task["subtasks"]:
                             dict_task["subtasks"][data["name"]] = data["is_done"]
+                            await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="set-subtask", activity_description=f"Subtask status has been updated.")
                         else:
                             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The subtask not exists'}
                             await self.send_json(response)
                             return False
                     elif request_id == "add-subtask":
                         dict_task["subtasks"][data["name"]] = False
+                        await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="set-subtask", activity_description=f"Subtask has been addedd.")
                     else:
                         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Bad request.'}
                         await self.send_json(response)
@@ -812,7 +900,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def update_task_labels(self, request_id, data):
         try:
-            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager', 'Scrum master']) # board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager', 'Scrum master'])
+            board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
             if board:
                 try:
                     dict_col = board.board[data["col_index"]]
@@ -820,9 +909,13 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     dict_task = board.board[data["col_index"]][col_name][int(data["task_index"])]
                     if request_id == "add-label":
                         dict_task["labels"].append(data["label"])
+                        await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="add-label", activity_description=f"New Label has been addedd.")
                     elif request_id == "remove-label":
                         if data["label"] in dict_task["labels"]:
                             dict_task["labels"].remove(data["label"])
+                            await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="remove-label", activity_description=f"Label has been deleted.")
                         else:
                             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The label not exists'}
                             await self.send_json(response)
@@ -847,7 +940,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def change_tasks_col(self, request_id, data):
         try:
-            board = await self.role_permission(data, access_role_permissions=['Product owner', 'Project manager', 'Scrum master', 'Team member']) # board = await database_sync_to_async(self.get_board_db)(data, self.user)
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Project manager', 'Scrum master', 'Team member'])
+            board = await database_sync_to_async(self.get_board_db)(data, usr=usr)
             if board:  
                 col_values = board.board
                 tasks_2_move = []
@@ -892,6 +986,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     return False
 
                 await database_sync_to_async(self.save_db)(board)
+                await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
+                                    activity_type="move-task", activity_description=f"Task(s) has been moved from {from_col} > {to_col}.")
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Tasks moved successfuly.', "data": board.board} # to return the full project
                 await self.send_json(response)
                 return True
@@ -937,34 +1033,28 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             return await self.send_json(response)
 
 
-    async def delete_aws_file(self, request_id, data):
+    async def delete_aws_file(self, request_id, data): 
         try:
-            if self.user == self.project_owner_user:
-                is_deleted = self.dltfl(data["file_url"])
-                if is_deleted:
-                    response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'File seccessfuly deleted.'}
-                    return await self.send_json(response)
-                else:
-                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'File not deleted.'}
+            usr, _ = await self.role_permission(access_role_permissions=['Project manager'])
+            board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, usr=usr)
+            if board:  
+                try:
+                    is_deleted = self.dltfl(data["file_url"])
+                    if is_deleted:
+                        await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
+                                            activity_type="delete-file", activity_description="A file has been deleted.")
+                        response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'File seccessfuly deleted.'}
+                        return await self.send_json(response)
+                    else:
+                        response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'File not deleted.'}
+                        return await self.send_json(response)
+                except FileNotFoundError as e:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(e)}
                     return await self.send_json(response)
             else:
-                assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
-                if self.user.email in assignee:
-                    if assignee[self.user.email]["role"] == "Project manager":
-                        is_deleted = self.dltfl(data["file_url"])
-                        if is_deleted:
-                            response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'File seccessfuly deleted.'}
-                            return await self.send_json(response)
-                        else:
-                            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'File not deleted.'}
-                            return await self.send_json(response)
-                    else:
-                        response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You dont have permission'}
-                        return await self.send_json(response)
-                else:
-                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You dont have assecc to this project'}
-                    return await self.send_json(response)
-        except FileNotFoundError as e:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'The board not exists'}
+                return await self.send_json(response)
+        except PermissionError as e:
             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(e)}
             return await self.send_json(response)
 
@@ -972,6 +1062,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     def dltfl(self, file_url):
         try:
             file_aws_name = urlparse(file_url).path[1:]
+            print(file_aws_name)
             utils_cls = VifUtils()
             is_deleted = utils_cls.delete_from_s3(self.project_owner_user, file_aws_name)
             if is_deleted:
@@ -1023,19 +1114,86 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     '''
     user role permission
     '''
-    async def role_permission(self, data, access_role_permissions):
-        if self.project_owner_user == self.user:  # current user is the owner
-            board = await database_sync_to_async(self.get_board_db)(data, usr=self.user)
+    async def role_permission(self, access_role_permissions):
+        if self.project_owner_user == self.user:
+            return self.user, None
         else:
             assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
             if self.user.email in assignee:
-                if assignee[self.user.email]["role"] in access_role_permissions:
-                    board = await database_sync_to_async(self.get_board_db)(data, usr=self.project_owner_user)
+                current_user_role = assignee[self.user.email]["role"]
+                if current_user_role in access_role_permissions:
+                    return self.project_owner_user, current_user_role
                 else:
                     raise PermissionError('You dont have permission')
             else:
                 raise PermissionError('You dont have assecc to this project')
-        return board
+
+
+
+
+
+
+
+
+
+
+
+
+    # async def delete_aws_file(self, request_id, data): 
+    #     try:
+    #         if self.user == self.project_owner_user:
+    #             is_deleted = self.dltfl(data["file_url"])
+    #             if is_deleted:
+    #                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'File seccessfuly deleted.'}
+    #                 return await self.send_json(response)
+    #             else:
+    #                 response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'File not deleted.'}
+    #                 return await self.send_json(response)
+    #         else:
+    #             assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
+    #             if self.user.email in assignee:
+    #                 if assignee[self.user.email]["role"] == "Project manager":
+    #                     is_deleted = self.dltfl(data["file_url"])
+    #                     if is_deleted:
+    #                         response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'File seccessfuly deleted.'}
+    #                         return await self.send_json(response)
+    #                     else:
+    #                         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'File not deleted.'}
+    #                         return await self.send_json(response)
+    #                 else:
+    #                     response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You dont have permission'}
+    #                     return await self.send_json(response)
+    #             else:
+    #                 response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You dont have assecc to this project'}
+    #                 return await self.send_json(response)
+    #     except FileNotFoundError as e:
+    #         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(e)}
+    #         return await self.send_json(response)
+
+
+
+    # async def get_board_activities(self, request_id, data):
+    #     try:
+    #         board = await self.role_permission({"board": data["board"]}, access_role_permissions=['Product owner', 'Scrum master', 'Project manager', 'Team member']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+    #         if board:
+    #             data = await self.board_activities(board)
+    #             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board activities', 'data': data}
+    #             return await self.send_json(response)
+                
+    #         else:
+    #             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board not exists.'}
+    #             return await self.send_json(response) 
+    #     except PermissionError as pe:
+    #         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+    #         return await self.send_json(response)
+
+
+
+    # @database_sync_to_async
+    # def board_activities(self, board):
+    #     board_activities = BoardActivities.objects.filter(board=board)   
+    #     return BoardActivitiesSerializer(board_activities, many=True).data
+
 
 
 # query = data["filters"]
@@ -1085,6 +1243,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 #             tsks = list(x.values())[0]
                 #             for t in tsks:
                 #                 results.append(t)
+
 
 
 # if "stages" in query:

@@ -25,7 +25,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/upload_file/', views.UplaodFileAWS.as_view(), name="aws-files"), 
 
     # path('change_tasks_col/<str:pf>/<str:prjct>/<str:from_col>/<str:tasks_ids>/<str:to_col>/<int:in_pos>/', views.ChangeTasksCol.as_view(), name="change-tasks-col"), # wss
-    
+    # TODO path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/csv_test/', views.ProjectActivities.as_view(), name="csv-test"), 
     # path('add_col/<str:pf>/<str:prjct>/<str:colname>/', views.AddCol.as_view(), name="add-col"), # wss
     # path('delete_col/<str:pf>/<str:prjct>/<int:col_index>/', views.DeleteCol.as_view(), name="delete-col"), # wss
     # path('change_col_order/<str:pf>/<str:prjct>/<int:col_index>/<int:to_index>/', views.ChangeColOrder.as_view(), name="change-col-order"), # wss

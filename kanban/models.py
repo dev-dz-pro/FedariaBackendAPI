@@ -66,8 +66,8 @@ class BoardActivities(models.Model):
     activity_user_email = models.EmailField(max_length=100)
     activity_description = models.CharField(max_length=250)
     activity_date = models.DateTimeField(auto_now_add=True)
-    activity_type = models.CharField(max_length=50)  #v chqnge to slqg 
-
+    activity_type = models.SlugField(max_length=50) 
+    
 
 class InvitedProjects(models.Model):
     iuser = models.ForeignKey(User, on_delete=models.CASCADE)

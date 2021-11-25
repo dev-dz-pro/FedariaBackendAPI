@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import Board, Portfolio, Project, Workspace
+from .models import Board, BoardActivities, Portfolio, Project, Workspace
 
 
 
@@ -35,6 +35,12 @@ class BoardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Board
         fields = ("name", "board")
+
+class BoardActivitiesSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(read_only=True, source="board.prj.portfolio.workspace.workspace_user.name")
+    class Meta:
+        model = BoardActivities
+        fields = ("name", "activity_user_email", "activity_description", "activity_type", "activity_date")
 
 class PSerializer(serializers.ModelSerializer):
     class Meta:

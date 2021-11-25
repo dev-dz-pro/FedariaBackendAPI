@@ -25,10 +25,6 @@ urlpatterns = [
 
     path('password/reset/', ResetPasswordView.as_view(), name='password-reset'),
     path('password/reset/confirm/', NewPassView.as_view(), name="pass-email-verify"),
-
-    # path('github-auth/', GithubInfo.as_view(), name="github-info"),
-    # path('social_auth/', SocialAuth.as_view(), name="social-auth"),
-
     
     path('social_auth_google/', Google_SocAuthTest.as_view(), name="social-auth-google"),
     path('social_auth_github/', Github_SocAuthTest.as_view(), name="social-auth-github"),

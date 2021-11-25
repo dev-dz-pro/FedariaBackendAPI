@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from .models import InvitedProjects, Portfolio, Project, Workspace
+from .models import InvitedProjects, Portfolio, Project, Workspace, BoardActivities
 from vifApp.models import User, UserNotification
 from .serializers import (PortfolioSerializer, KanbanProjectSerializer, ProjectSerializer, 
                         BoardSerializer, WorkspaceSerializer)
@@ -402,6 +402,33 @@ class PinUnpinProject(APIView):
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Project or portfolio not exists'}
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
+
+# class ProjectActivities(APIView):
+#     def get(self, request, workspace_uid, portfolio_uid, project_uid):
+#         payload = permission_authontication_jwt(request)
+#         user = User.objects.filter(id=payload['id']).first()
+#         project = Project.objects.filter(project_uuid=project_uid, portfolio__workspace__workspace_user=user, portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid).first()
+#         if project:
+            
+#             # Create the HttpResponse object with the appropriate CSV header.
+#             import csv
+#             from django.http import HttpResponse
+#             response = HttpResponse(
+#                 content_type='text/csv',
+#                 headers={'Content-Disposition': 'attachment; filename="somefilename.csv"'},
+#             )
+#             writer = csv.writer(response)
+#             writer.writerow(['Username', 'Activity Dype', 'Activity Description', 'Activity Date'])
+            
+#             boards = BoardActivities.objects.filter(board__prj=project)
+#             for brd in boards:
+#                 writer.writerow([brd.activity_user_email, brd.activity_type, brd.activity_description, brd.activity_date])
+#             ###############################
+
+#             return response
+#         else:
+#             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Project or portfolio not exists'}
+#             return Response(response, status.HTTP_400_BAD_REQUEST)
 
 '''
 Tasks PART

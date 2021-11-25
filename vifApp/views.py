@@ -110,14 +110,14 @@ class EmailVerifyView(APIView):
                 'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token Expired!'
             }
-            raise AuthenticationFailed(response)
+            return Response(response, status.HTTP_403_FORBIDDEN)
         except jwt.ExpiredSignatureError:
             response = {
                 'status': 'error',
                 'code': status.HTTP_403_FORBIDDEN,
                 'message': UNAUTHONTICATED
             }
-            raise AuthenticationFailed(response)
+            return Response(response, status.HTTP_403_FORBIDDEN)
 
 
 
@@ -180,7 +180,7 @@ class TokenRefreshView(APIView):
                 'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Please login!'
             }
-            raise AuthenticationFailed(response)
+            return Response(response, status.HTTP_403_FORBIDDEN)
         try:
             payload = jwt.decode(refresh, settings.SECRET_KEY+settings.SECRET_REFRESH_KEY, algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
@@ -189,14 +189,14 @@ class TokenRefreshView(APIView):
                 'code': status.HTTP_403_FORBIDDEN,
                 'message': UNAUTHONTICATED
             }
-            raise AuthenticationFailed(response)
+            return Response(response, status.HTTP_403_FORBIDDEN)
         except jwt.DecodeError:
             response = {
                 'status': 'error',
                 'code': status.HTTP_403_FORBIDDEN,
                 'message': 'invalid refresh token, please login!'
             }
-            raise AuthenticationFailed(response)
+            return Response(response, status.HTTP_403_FORBIDDEN)
         payload_access = {
             'id': payload["id"],
             'iat': datetime.datetime.utcnow(),
@@ -220,8 +220,8 @@ class Github_SocAuthTest(APIView):
         code = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
         endpoint = "https://github.com/login/oauth/access_token"
         data = {"code": code,
-                "client_id": "65ad233b6c86eb522646", # settings.GITHUB_CLIENT_ID,
-                "client_secret": "b8b1b739cf432dd8772bb31e6ea01e33e4c12dc4", # settings.GITHUB_SECRET_KEY,
+                "client_id": settings.GITHUB_CLIENT_ID,
+                "client_secret": settings.GITHUB_SECRET_KEY,
                 "redirect_uri": "http://localhost:3000/social_auth"}
         social_res = requests.post(endpoint, data=data)
         if 'error' in parse_qs(social_res.text):
@@ -269,8 +269,8 @@ class Gitlab_SocAuthTest(APIView):
         code = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
         endpoint = "https://gitlab.com/oauth/token"
         data = {"code": code,
-                "client_id": "b58e0a039e3e7c9ee9eeeaed91471614ac0c2210768d4dc65a95243098f7da61", #settings.GITLAB_CLIENT_ID,
-                "client_secret": "37a2a9cfcda607228ae90eeb3d4df0d72459dded55035a8df4197d9cad550ee6", #settings.GITLAB_SECRET_KEY,
+                "client_id": settings.GITLAB_CLIENT_ID,
+                "client_secret": settings.GITLAB_SECRET_KEY,
                 "grant_type": "authorization_code",
                 "redirect_uri": "http://localhost:3000/social_auth"}
         social_res = requests.post(endpoint, data=data).json()
@@ -576,8 +576,6 @@ class ResetPasswordView(APIView):
                     'message': '(' + err[0][0] + ') ' + err[0][1][0]
                 }
             return Response(response, status.HTTP_400_BAD_REQUEST)
-        
-
 
 
 class NewPassView(APIView):
@@ -604,13 +602,13 @@ class NewPassView(APIView):
                     'message': "Passwords not match"
                 }
                 return Response(response, status.HTTP_400_BAD_REQUEST)
-        except jwt.ExpiredSignatureError:
+        except Exception:
             response = {
                 'status': 'error',
                 'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token expired!'
             }
-            raise AuthenticationFailed(response)
+            return Response(response, status.HTTP_403_FORBIDDEN)
 
 
 

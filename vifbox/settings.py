@@ -172,6 +172,7 @@ SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 REGION_NAME = os.environ.get('REGION_NAME')
 
+
 GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID')
 GITHUB_SECRET_KEY = os.environ.get('GITHUB_SECRET_KEY')
 
@@ -179,29 +180,14 @@ GITHUB_SECRET_KEY = os.environ.get('GITHUB_SECRET_KEY')
 GITLAB_CLIENT_ID = os.environ.get('GITLAB_CLIENT_ID')
 GITLAB_SECRET_KEY = os.environ.get('GITLAB_SECRET_KEY')
 
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.office365.com'
-# EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
-# EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-# SERVER_EMAIL = EMAIL_HOST_USER
-
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp-mail.outlook.com'
-# EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
-# EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
-# EMAIL_PORT = 25
-# EMAIL_USE_TLS = True
-# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-# SERVER_EMAIL = EMAIL_HOST_USER
-
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_USE_TLS = True
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.office365.com'
+EMAIL_HOST_USER = os.environ.get('VIF_EMAIL') 
+EMAIL_HOST_PASSWORD = os.environ.get('VIF_PASS')
 EMAIL_PORT = 587
-EMAIL_HOST_USER = "beiniptv.tools@gmail.com" # os.environ.get('gm_user') 
-EMAIL_HOST_PASSWORD = "uigkxdkkrbzmtiwg" # os.environ.get('gm_pass') 
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+SERVER_EMAIL = EMAIL_HOST_USER
+
 
 
