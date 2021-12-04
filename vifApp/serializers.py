@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, UserNotification
 from rest_framework.exceptions import ValidationError
 from rest_framework import status
 import re
@@ -45,6 +45,13 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(required=True)
 
 
+class UserStatusSerializer(serializers.Serializer):
+    status = serializers.CharField(required=True)
+    def validate(self, data):
+        stts = data.get('status')
+        if not stts in ['Available', 'Busy', 'Do not disturb', 'Away']:
+            raise ValidationError({"status": "should be ('Available', 'Busy', 'Do not disturb' or 'Away')"})
+        return data
 
 class CompanySerializer(serializers.Serializer):
     model = User
@@ -56,7 +63,6 @@ class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True)
     new_password1 = serializers.CharField(required=True)
-
 
 
 class UpdateProfileSerializer(serializers.Serializer):
@@ -74,14 +80,19 @@ class UpdateProfileSerializer(serializers.Serializer):
             raise ValidationError({"Phone number": "must be entered in the format: '+999999999'. Up to 15 digits allowed."})
 
 
-
 class UpdateProfileImageSerializer(serializers.Serializer):
     model = User
     profile_img_url = serializers.FileField(max_length=None, allow_empty_file=False)
     profile_title = serializers.CharField(allow_blank=True, allow_null=True)
 
 
-
 class ResetPasswordSerializer(serializers.Serializer):
     model = User
     email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
+
+
+class UserNotificationSerializer(serializers.ModelSerializer):
+    notification_from = serializers.CharField(read_only=True, source="notification_from.name")
+    class Meta:
+        model = UserNotification
+        fields = ("notification_from", "notification_text", "notification_url", "created_at")

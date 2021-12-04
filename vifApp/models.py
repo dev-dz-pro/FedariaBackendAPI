@@ -18,6 +18,8 @@ class User(AbstractUser):
     profile_title = models.CharField(max_length=255)
     company_email = models.EmailField(blank=True)
     company_name = models.CharField(max_length=255, blank=True)
+    STATUS_CHOICES = [('Available', 'Available'), ('Busy', 'Busy'), ('Do not disturb', 'Do not disturb'), ('Away', 'Away')]
+    status = models.CharField(max_length=100, choices=STATUS_CHOICES, default='Available') 
 
     def get_presigned_url_img(self):
         if not self.profile_image.startswith("https://vifbox-backend.s3.amazonaws.com"):
@@ -37,6 +39,7 @@ class UserNotification(models.Model):
     notification_from = models.ForeignKey(User, on_delete=models.CASCADE, related_name='+')
     notification_text = models.CharField(max_length=500)
     notification_url = models.CharField(max_length=350)
+    notification_seen = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     def was_published_today(self):
         return self.created_at >= timezone.now() - datetime.timedelta(days=1)

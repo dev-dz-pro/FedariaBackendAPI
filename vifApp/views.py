@@ -10,11 +10,13 @@ import datetime
 from .utils import VifUtils
 from rest_framework import status
 from django.conf import settings
+from django.core.paginator import Paginator, EmptyPage
 import requests
 from threading import Thread
 from urllib.parse import parse_qs
 from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
-                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, CompanySerializer)
+                        UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, 
+                        CompanySerializer, UserNotificationSerializer, UserStatusSerializer)
 
 
 UNAUTHONTICATED = 'Unauthenticated!'
@@ -94,7 +96,7 @@ class EmailVerifyView(APIView):
                 user.save()
                 UserNotification.objects.create(notification_user=user, 
                                                 notification_text="welcome to vifbox, your account is verified",
-                                                notification_from="Vifbox", notification_url="to_url/")
+                                                notification_from=user, notification_url="to_url/")
                 response = {
                     'status': 'success',
                     'code': status.HTTP_200_OK,
@@ -346,17 +348,15 @@ class Google_SocAuthTest(APIView):
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Request is missing required authentication credent…ogle.com/identity/sign-in/web/devconsole-project.'}
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
+
 class ProfileView(APIView):
     def get(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        notification = UserNotification.objects.filter(notification_user=user)
         prf_img = user.get_presigned_url_img() 
         if user.profile_image != prf_img:
             user.profile_image = prf_img
             user.save()
-        kys = ("from", "desc", "url", "date") 
-        notf = [{kys[0]: nt.notification_from, kys[1]: nt.notification_text, kys[2]: nt.notification_url, kys[3]: nt.created_at} for nt in notification] 
         response = {
             'status': 'success',
             'code': status.HTTP_200_OK,
@@ -369,7 +369,7 @@ class ProfileView(APIView):
                 "phone_number": str(user.phone_number),
                 "company_email": user.company_email,
                 "company_name": user.company_name,
-                "notification": notf
+                "status": user.status,
             }
         }
         return Response(response)
@@ -473,13 +473,10 @@ class SettingsView(APIView):
     def get(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        notification = UserNotification.objects.filter(notification_user=user)
         prf_img = user.get_presigned_url_img() 
         if user.profile_image != prf_img:
             user.profile_image = prf_img
             user.save()
-        kys = ("from", "desc", "url", "date") 
-        notf = [{kys[0]: nt.notification_from, kys[1]: nt.notification_text, kys[2]: nt.notification_url, kys[3]: nt.created_at} for nt in notification] 
         response = {
             'status': 'success',
             'code': status.HTTP_200_OK,
@@ -488,7 +485,7 @@ class SettingsView(APIView):
                 "username": user.username,
                 "profile_img_url": prf_img,
                 "is_verified": user.is_verified,
-                "notification": notf
+                "status": user.status,
             }
         }
         return Response(response)
@@ -611,6 +608,56 @@ class NewPassView(APIView):
             return Response(response, status.HTTP_403_FORBIDDEN)
 
 
+class GetUserNotifications(APIView):
+    def get(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        page_num = request.GET.get("page", 1)
+        seen = request.GET.get("new", "true")
+        if seen == "true":
+            notification = UserNotification.objects.filter(notification_user=user, notification_seen=False).order_by('-created_at')
+        else:
+            notification = UserNotification.objects.filter(notification_user=user).order_by('-created_at')
+        p = Paginator(notification, 8)
+        try:
+            page = p.page(page_num)
+        except EmptyPage:
+            page = p.page(1)
+        for p in page.object_list:
+            p.notification_seen = True
+            p.save()
+        response = {
+            'status': 'success',
+            'code': status.HTTP_200_OK,
+            'message': 'Notification Info',
+            'data': UserNotificationSerializer(page.object_list, many=True).data
+        }
+        return Response(response) 
+
+
+class ChangeUserStatus(APIView):
+    def post(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = UserStatusSerializer(data=request.data)
+        if serializer.is_valid():
+            user.status = serializer.data["status"]
+            user.save()
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'User Status Updated',
+                'data': []
+            }
+            return Response(response) 
+        else:
+            err = list(serializer.errors.items())
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
 
 def permission_authontication_jwt(request):
     try:

@@ -1,8 +1,9 @@
 import json
 from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from .serializers import TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer, BoardActivitiesSerializer
-from .models import Portfolio, Project, Board, InvitedProjects, BoardActivities
+from .serializers import (TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer, 
+                        BoardActivitiesSerializer, ProjectRolesSerializer, InviteUsersSerializer)
+from .models import Portfolio, Project, Board, InvitedProjects, BoardActivities, ProjectOnlineUsers
 from vifApp.models import User, UserNotification
 from channels.db import database_sync_to_async
 from django.db.utils import IntegrityError
@@ -27,11 +28,12 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             self.room_name = self.ws + self.pf + self.pj
             encoded=self.room_name.encode()
             self.room_group_name = 'team_%s' % hashlib.sha256(encoded).hexdigest()
-            self.project_owner_user = await self.project_owner(self.ws, self.pf, self.pj)
+            self.project_owner_user, self.project = await self.project_owner(self.ws, self.pf, self.pj)
         except PermissionError:
             return await self.disconnect(close_code=403)
         # Join room group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.got_online()
         await self.accept()
 
 
@@ -39,6 +41,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         # Leave room group
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        await self.got_offline()
 
 
 
@@ -49,27 +52,42 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         await self.single_user_response(request_id, data)
         
 
-
     @sync_to_async
     def project_owner(self, ws_uid, pf_uid,  pj_uid):
-        owner = User.objects.filter(workspace__workspace_uuid=ws_uid, 
-                    workspace__portfolio__portfolio_uuid=pf_uid, 
-                    workspace__portfolio__project__project_uuid=pj_uid).first()
         project = Project.objects.filter(portfolio__workspace__workspace_uuid=ws_uid, 
                     portfolio__portfolio_uuid=pf_uid,  project_uuid=pj_uid).first()
-        if project and owner:
+        if project:
+            owner = project.portfolio.workspace.workspace_user
             if self.user.email in project.invited_users or owner == self.user:
-                return owner
+                return owner, project
             else:
                 raise PermissionError("You are not invited to this project.")
         else:
             raise PermissionError("You are not invited to this project.")
 
+    @sync_to_async
+    def got_online(self):   
+        usr = ProjectOnlineUsers.objects.filter(user=self.user, project=self.project)
+        if self.user.email in self.project.invited_users:
+            if not usr:
+                ProjectOnlineUsers.objects.create(user=self.user, project=self.project, is_online=True)
+            else:
+                usr.update(is_online=True) 
+        else:
+            usr.delete()
+
+    @sync_to_async
+    def got_offline(self): 
+        usr = ProjectOnlineUsers.objects.filter(user=self.user, project=self.project)  
+        if usr:
+            usr.update(is_online=False) 
 
 
     # for single user response
     async def single_user_response(self, request_id, data):
-        if request_id == "get-board":
+        if request_id == "get-online-users":
+            await self.get_online_users(request_id)
+        elif request_id == "get-board":
             await self.get_board(request_id, data)
         elif request_id == "get-board-tasks":
             await self.get_board_tasks(request_id, data)
@@ -93,6 +111,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.get_aws_file(request_id, data)
         elif request_id == "get-project-activities":
             await self.get_project_activities(request_id, data)
+        elif request_id == "export-board":
+            await self.export_board(request_id, data)
         else:
             if request_id == "create-task":
                 is_updated = await self.create_task(request_id, data)
@@ -133,6 +153,23 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     '''
     Project part
     '''
+
+
+    async def get_online_users(self, request_id):
+        data = await self.online_users_project()
+        response = {'request_id': request_id, 'data': data}
+        await self.send_json(response)
+
+    @database_sync_to_async
+    def online_users_project(self):
+        prj_users = self.project.projectonlineusers_set.all()
+        data = []
+        for x in prj_users:
+            data.append({"user_email": x.user.email, "user_name": x.user.name, "online": x.is_online, "status": x.user.status})
+        return data
+
+
+
     async def create_project(self, request_id, data):
         try:
             # roles and permissions part
@@ -203,9 +240,9 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def delete_project(self, request_id, data):
         if self.project_owner_user == self.user:
-            project = await database_sync_to_async(self.get_project_db)(self.user) 
-            if project:
-                await database_sync_to_async(self.delete_db)(project)
+            # project = await database_sync_to_async(self.get_project_db)(self.user) 
+            if self.project:
+                await database_sync_to_async(self.delete_db)(self.project)
                 response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': 'Project deleted.', "data": []}
                 return await self.send_json(response)
             else:
@@ -217,43 +254,56 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
 
     async def invite_users(self, request_id, data):
-        if self.project_owner_user == self.user:
-            invited_users = data['users_email']
-            await database_sync_to_async(self.set_invited)(invited_users) # , data["project_path"]
-            response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': 'user invited to project', "data": {"notification": f"{invited_users} has been invited to ({self.pj}) project"}}
-            await self.send_json(response)
-            return True
+        serializer = InviteUsersSerializer(data=data)
+        if serializer.is_valid():
+            if self.project_owner_user == self.user:
+                invited_users = serializer.data['users_email']
+                await database_sync_to_async(self.set_invited)(invited_users) 
+                response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': 'user invited to project', "data": {"notification": f"{invited_users} has been invited to ({self.pj}) project"}}
+                await self.send_json(response)
+                return True
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You not allowed to invite users.'}
+                await self.send_json(response) 
+                return False
         else:
-            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You not allowed to invite users.'}
-            await self.send_json(response) 
-            return False
+            err = list(serializer.errors.items())
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': '(' + err[0][0] + ') ' + err[0][1][0]}
+            return await self.send_json(response)
+        
 
     
     async def change_user_role(self, request_id, data):
-        if self.project_owner_user == self.user:
-            try:
-                project = await database_sync_to_async(self.get_project_db)(self.user) 
-                project.invited_users[data["email"]]["role"] = data["role"]
-                await database_sync_to_async(project.save)()
-                response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': 'Role updated seccessfuly', "data": []}
-                return await self.send_json(response)
-            except:
-                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Email not found.'}
-                return await self.send_json(response)
+        serializer = ProjectRolesSerializer(data=data)
+        if serializer.is_valid():
+            if self.project_owner_user == self.user:
+                try:
+                    # project = await database_sync_to_async(self.get_project_db)(self.user) 
+                    self.project.invited_users[data["email"]]["role"] = serializer.data["role"]   
+                    await database_sync_to_async(self.project.save)()
+                    response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': 'Role updated seccessfuly', "data": []}
+                    return await self.send_json(response)
+                except:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Email not found.'}
+                    return await self.send_json(response)
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You not allowed to invite users.'}
+                return await self.send_json(response) 
         else:
-            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'You not allowed to invite users.'}
-            return await self.send_json(response) 
+            err = list(serializer.errors.items())
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': '(' + err[0][0] + ') ' + err[0][1][0]}
+            return await self.send_json(response)
 
     
     async def remove_user(self, request_id, data):
         if self.project_owner_user == self.user:
-            project = await database_sync_to_async(self.get_project_db)(self.user) 
+            # project = await database_sync_to_async(self.get_project_db)(self.user) 
             eml = data["email"]
-            invtdusr = await database_sync_to_async(InvitedProjects.objects.filter)(iuser__email=eml, inviter_project=project)
+            invtdusr = await database_sync_to_async(InvitedProjects.objects.filter)(iuser__email=eml, inviter_project=self.project)
             invtdusr = await sync_to_async(invtdusr.first)()
-            if eml in project.invited_users and invtdusr:
-                del project.invited_users[eml]
-                await database_sync_to_async(project.save)()
+            if eml in self.project.invited_users and invtdusr:
+                del self.project.invited_users[eml]
+                await database_sync_to_async(self.project.save)()
                 await database_sync_to_async(invtdusr.delete)()
                 response = {'status': 'ok', 'code': 200, 'request_id': request_id, 'message': 'User removed seccessfuly', "data": []}
                 return await self.send_json(response)
@@ -352,14 +402,14 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             InvitedProjects.objects.bulk_create(invprj)
             UserNotification.objects.bulk_create(ntfs)
             send_mass_mail(invusrs)
-    
+        
 
     async def get_project_activities(self, request_id, data):
         try:
-            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
-            project = await database_sync_to_async(self.get_project_db)(usr)
-            if project:
-                data = await self.board_project_activities(project, data)
+            await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
+            # project = await database_sync_to_async(self.get_project_db)(usr)
+            if self.project:
+                data = await self.board_project_activities(self.project, data)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Project activities', 'data': data}
                 return await self.send_json(response)
             else:
@@ -382,25 +432,38 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         return BoardActivitiesSerializer(boards, many=True).data
 
     
-    # async def export_activities(self, request_id, data):
-    #     try:
-    #         usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
-    #         board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, usr=usr)
-    #         if board:
-    #             activities = await database_sync_to_async(BoardActivities.objects.filter)(board=board)
-    #             activities = await sync_to_async(activities.order_by)('-activity_date')
-    #             activities = await sync_to_async(activities.values)('activity_date', 'activity_type', 'activity_description')
-    #             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board task has been created.', 'data': activities}
-    #             await self.send_json(response)
-    #             return True
-    #         else:
-    #             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board not exists.'}
-    #             await self.send_json(response) 
-    #             return False
-    #     except PermissionError as pe:
-    #         response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
-    #         await self.send_json(response)
-    #         return False
+    async def export_board(self, request_id, data):
+        try:
+            usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager']) # board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, self.user)
+            board = await database_sync_to_async(self.get_board_db)({"board": data["board"]}, usr=usr)
+            if board:
+                res_brd = []
+                for col in board.board:
+                    for col_name, tsks in col.items():
+                        for tsk in tsks:
+                            aging = None
+                            if "first_move_date" in tsk and "last_move_date" in tsk:
+                                d1 = dt.strptime(tsk["first_move_date"].split(".")[0], '%Y-%m-%dT%H:%M:%S')
+                                d2 = dt.strptime(tsk["last_move_date"].split(".")[0], '%Y-%m-%dT%H:%M:%S')
+                                aging = str(d2-d1)
+                            pf_name, pj_name = await sync_to_async(self.get_pf_pj)(board)
+                            res_brd.append({"portfolio_name": pf_name, "project_name": pj_name, "board_name": data["board"], "col_name": col_name, "name": tsk["name"], "created_at": tsk["created_at"], 
+                                        "story": tsk["story"], "due_date": tsk["due_date"], "aging": aging, 
+                                        "files": tsk["files"], "labels": tsk["labels"], "subtasks": tsk["subtasks"], "assignees": tsk["assignees"]})
+                response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board task has been created.', 'data': res_brd}
+                return await self.send_json(response)
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Board not exists.'}
+                await self.send_json(response) 
+                return False
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            await self.send_json(response)
+            return False
+
+    def get_pf_pj(self, board):
+        return board.prj.portfolio.portfolio_name, board.prj.name
+
 
     '''
     Board Part
@@ -524,6 +587,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.save_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
                                     activity_type="update-board", activity_description=f"Board name has been updated.")
+                notification_text, notification_url = f"({board.name}) Board name has been updated to {board.name}.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'({data["old_name"]}) Kanban board name updated.', "data": {"board": board.board}}
                 await self.send_json(response)
                 return True
@@ -539,10 +604,10 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
     async def create_board(self, request_id, data):
         try:
-            if self.project_owner_user == self.user:
-                project = await database_sync_to_async(self.get_project_db)(self.user) 
-            else:
-                project = await database_sync_to_async(self.get_project_db)(self.project_owner_user)
+            # if self.project_owner_user == self.user:
+            #     project = await database_sync_to_async(self.get_project_db)(self.user) 
+            # else:
+            #     project = await database_sync_to_async(self.get_project_db)(self.project_owner_user)
             usr, _ = await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
             board = await database_sync_to_async(self.get_board_db)({"board": data["name"]}, usr=usr)
             if board:
@@ -551,13 +616,15 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 return False 
             else:
                 if data["name"].strip() == "":
-                    board_count = await database_sync_to_async(Board.objects.filter)(prj=project)
+                    board_count = await database_sync_to_async(Board.objects.filter)(prj=self.project)
                     board_count = await sync_to_async(board_count.count)()
-                    await database_sync_to_async(self.db_create_board)(prj=project, name=f"kanban Board {board_count+1}")
+                    await database_sync_to_async(self.db_create_board)(prj=self.project, name=f"kanban Board {board_count+1}")
                 else:
-                    await database_sync_to_async(self.db_create_board)(prj=project, name=data["name"])
+                    await database_sync_to_async(self.db_create_board)(prj=self.project, name=data["name"])
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
                                     activity_type="create-board", activity_description=f"New Board has been created.")
+                notification_text, notification_url = f"Board ({board.name}) has been created on project {self.project.name}.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Board task has been created.'}
                 await self.send_json(response)
                 return True
@@ -575,6 +642,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.delete_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
                                     activity_type="delete-board", activity_description=f"Board has been deleted.")
+                notification_text, notification_url = f"({board.name}) Board has been deleted.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'({data["name"]}) Kanban board deleted.'}
                 await self.send_json(response)
                 return True
@@ -587,6 +656,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json(response)
             return False
         
+
     async def search_boards(self, request_id, data):
         try: 
             data = await self.search_brd(data)
@@ -624,6 +694,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.save_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
                                     activity_type="add-col", activity_description=f"New Column ({colname}) has been added.")
+                notification_text, notification_url = f"New Column ({colname}) has been added to board {board.name}.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'{colname} column has been added sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -656,6 +728,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.save_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
                                     activity_type="rename-col", activity_description=f"Column ({colname}) has been renamed > {new_colname}.")
+                notification_text, notification_url = f"Column ({colname}) has been renamed > {new_colname} on board {board.name}.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'{colname} column has been renamed sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -685,6 +759,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.save_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
                                     activity_type="delete-col", activity_description="A column has been deleted.")
+                notification_text, notification_url = f"A column has been deleted on board {board.name}.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': f'The column has been deleted sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -710,6 +786,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.save_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email,
                                     activity_type="change-col-order", activity_description="A column order has been changed.")
+                notification_text, notification_url = f"A column order has been changed on board {board.name}.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The column order has been changed sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -767,6 +845,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.save_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
                                 activity_type="delete-task", activity_description=f"Task has been deleted.")
+                notification_text, notification_url = f"Task on board ({board.name}) has been deleted.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The task has been deleted sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -801,9 +881,11 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                             tasks_list = board.board[i][user_data["col"]]
                             tasks_list.append(my_task)
                             await database_sync_to_async(self.save_db)(board)
+                            await self.add_task_to_calendar(my_task, token=data["calendar"]["token"])
                             await database_sync_to_async(self.notify_assignees)(data["assignees"], task_title)
-                            await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
-                                activity_type="create-task", activity_description=f"({task_title}) Task has been created.")
+                            await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, activity_type="create-task", activity_description=f"({task_title}) Task has been created.")
+                            notification_text, notification_url = f"New Task ({task_title}) has been created on board ({board.name}).", "http://will-be-front-board-page-route.com"
+                            await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                             response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The task has been created.'}
                             await self.send_json(response)
                             return True
@@ -835,6 +917,36 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         tm = created_time.split("T")[1]
         due_date = due_date.strip() + "T" + tm
         return created_time, due_date
+
+
+    async def add_task_to_calendar(self, data, token):
+        header = {"Authorization": "Bearer " + token, "Content-type": "application/json"}
+        attendees = [{
+                        "emailAddress": {
+                            "address": x,
+                            "name": x.split("@")[0]
+                        },
+                    "type": "required"
+                    } for x in data["assignees"]]
+        info = {
+            "subject": data["name"],
+            "body": {
+                "contentType": "HTML",
+                "content": data["name"]
+            },
+            "start": {
+                "dateTime": data["created_at"],
+                "timeZone": "Pacific Standard Time"
+            },
+            "end": {
+                "dateTime": data["due_date"],
+                "timeZone": "Pacific Standard Time"
+            },
+            "attendees": attendees,
+            "allowNewTimeProposals": True,
+            "transactionId": "0A163156-7762-4BEB-A1C6-719EA81755A7"
+        }
+        res = requests.post("https://graph.microsoft.com/v1.0/me/events", data=json.dumps(info), headers=header)
 
 
     async def update_subtask(self, request_id, data):
@@ -885,6 +997,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     await self.send_json(response)
                     return False
                 await database_sync_to_async(self.save_db)(board)
+                notification_text, notification_url = f"There is an Subtask update on board ({board.name}).", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The subtasks has been updated sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -925,6 +1039,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                     await self.send_json(response)
                     return False
                 await database_sync_to_async(self.save_db)(board)
+                notification_text, notification_url = f"There is an Label update on board ({board.name}).", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'The labels has been updated sucessfuly.'}
                 await self.send_json(response)
                 return True
@@ -988,6 +1104,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 await database_sync_to_async(self.save_db)(board)
                 await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, 
                                     activity_type="move-task", activity_description=f"Task(s) has been moved from {from_col} > {to_col}.")
+                notification_text, notification_url = f"Task(s) has been moved from {from_col} > {to_col} on board {board.name}.", "http://will-be-front-board-page-route.com"
+                await database_sync_to_async(self.notify_group)(board, notification_text, notification_url)
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Tasks moved successfuly.', "data": board.board} # to return the full project
                 await self.send_json(response)
                 return True
@@ -1005,12 +1123,14 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         assignee_users, notfs = [], []
         for asgn in assignees:
             assignee_user = User.objects.filter(email=asgn).first()
-            project_url = f"http://localhost:8000/api/dash/project/{self.pf}/{self.pj}/?invited=1"  # will change to front
-            email_body = f'Hi , you are assigned to a Task ({task_name})\nof the following Project: {project_url}.'
-            assignee_users.append(('Task assigned to you', email_body, settings.EMAIL_HOST_USER, [assignee_user.email]))
-            notfs.append(UserNotification(notification_user=assignee_user, notification_text=email_body, notification_from=self.user, notification_url=project_url))
-        UserNotification.objects.bulk_create(notfs)
-        send_mass_mail(assignee_users)
+            if assignee_user:
+                project_url = f"http://localhost:8000/api/dash/project/{self.pf}/{self.pj}/?invited=1"  # will change to front
+                email_body = f'Hi , you are assigned to a Task ({task_name})\nof the following Project: {project_url}.'
+                assignee_users.append(('Task assigned to you', email_body, settings.EMAIL_HOST_USER, [assignee_user.email]))
+                notfs.append(UserNotification(notification_user=assignee_user, notification_text=email_body, notification_from=self.user, notification_url=project_url))
+        if assignee_users:
+            UserNotification.objects.bulk_create(notfs)
+            send_mass_mail(assignee_users)
 
     '''
     S3 Storage part
@@ -1077,21 +1197,22 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     database query functions
     '''
     def get_board_db(self, user_data, usr):
-        return Board.objects.filter(prj__portfolio__workspace__workspace_user=usr, 
-                                    prj__portfolio__workspace__workspace_uuid=self.ws, prj__portfolio__portfolio_uuid=self.pf,
-                                    prj__project_uuid=self.pj, name=user_data["board"]).first() 
+        # return Board.objects.filter(prj__portfolio__workspace__workspace_user=usr, 
+        #                             prj__portfolio__workspace__workspace_uuid=self.ws, prj__portfolio__portfolio_uuid=self.pf,
+        #                             prj__project_uuid=self.pj, name=user_data["board"]).first() 
+        return self.project.board_set.filter(name=user_data["board"]).first()
 
-    def get_project_db(self, usr):
-        return Project.objects.filter(portfolio__workspace__workspace_user=usr, 
-                                    portfolio__workspace__workspace_uuid=self.ws, 
-                                    portfolio__portfolio_uuid=self.pf,
-                                    project_uuid=self.pj).first()
+    # def get_project_db(self, usr):
+    #     return Project.objects.filter(portfolio__workspace__workspace_user=usr, 
+    #                                 portfolio__workspace__workspace_uuid=self.ws, 
+    #                                 portfolio__portfolio_uuid=self.pf,
+    #                                 project_uuid=self.pj).first()
 
-    def get_project_assignee_db(self, usr):
-        prjct = Project.objects.filter(portfolio__workspace__workspace_user=usr, 
-                                    portfolio__workspace__workspace_uuid=self.ws, 
-                                    portfolio__portfolio_uuid=self.pf, project_uuid=self.pj).first()
-        return prjct.invited_users
+    # def get_project_assignee_db(self, usr):
+    #     prjct = Project.objects.filter(portfolio__workspace__workspace_user=usr, 
+    #                                 portfolio__workspace__workspace_uuid=self.ws, 
+    #                                 portfolio__portfolio_uuid=self.pf, project_uuid=self.pj).first()
+    #     return prjct.invited_users
 
 
     def get_img_url_by_email(self, eml):
@@ -1111,6 +1232,18 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         obj.delete()
 
 
+    def notify_group(self, board, notification_text, notification_url):
+        invited_users_json = board.prj.invited_users
+        owner_user = board.prj.portfolio.workspace.workspace_user
+        for eml in invited_users_json.keys():
+            if self.user != owner_user:
+                UserNotification.objects.create(notification_user=owner_user, notification_from=self.user, notification_text=notification_text, notification_url=notification_url)
+            else:
+                usr = User.objects.filter(email=eml).first()
+                if usr and usr != self.user:
+                    UserNotification.objects.create(notification_user=usr, notification_from=self.user, notification_text=notification_text, notification_url=notification_url)
+
+
     '''
     user role permission
     '''
@@ -1118,7 +1251,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         if self.project_owner_user == self.user:
             return self.user, None
         else:
-            assignee = await database_sync_to_async(self.get_project_assignee_db)(self.project_owner_user)
+            assignee = self.project.invited_users
             if self.user.email in assignee:
                 current_user_role = assignee[self.user.email]["role"]
                 if current_user_role in access_role_permissions:

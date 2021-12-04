@@ -25,8 +25,18 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/upload_file/', views.UplaodFileAWS.as_view(), name="aws-files"), 
 
     # path('change_tasks_col/<str:pf>/<str:prjct>/<str:from_col>/<str:tasks_ids>/<str:to_col>/<int:in_pos>/', views.ChangeTasksCol.as_view(), name="change-tasks-col"), # wss
-    # TODO path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/csv_test/', views.ProjectActivities.as_view(), name="csv-test"), 
+    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/export_activities/', views.ExportProjectActivities.as_view(), name="project-activities-csv"), 
+    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/export_board/', views.ExportBoard.as_view(), name="export-board-csv"), 
+    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/import_board/', views.ImportBoard.as_view(), name="import-board-csv"), 
     # path('add_col/<str:pf>/<str:prjct>/<str:colname>/', views.AddCol.as_view(), name="add-col"), # wss
     # path('delete_col/<str:pf>/<str:prjct>/<int:col_index>/', views.DeleteCol.as_view(), name="delete-col"), # wss
     # path('change_col_order/<str:pf>/<str:prjct>/<int:col_index>/<int:to_index>/', views.ChangeColOrder.as_view(), name="change-col-order"), # wss
+    
+    path('get_calender_events/', views.GetMSCalendarEvents.as_view(), name="get-events"),
+    path('get_event/', views.GetMSEvent.as_view(), name="get-event"),
+    path('delete_event/', views.DeleteMSEvent.as_view(), name="delete-event"),
+    path('cancel_event/', views.CancelMSEvent.as_view(), name="cancel-event"),
+
+    path('get_g_calender_events/', views.GetGGLEvents.as_view(), name="get-g-events"),
+    path('get_delete_g_event/', views.GetDeleteGGLEvent.as_view(), name="get-delete-g-event"),
 ]

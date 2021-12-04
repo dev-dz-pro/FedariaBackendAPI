@@ -74,7 +74,25 @@ class KanbanProjectSerializer(serializers.Serializer):
     #     if str(_name).__contains__('/'):  
     #         raise ValidationError({"name": "field should not contain '/'."})
     #     return data
-            
+        
+
+class InviteUsersSerializer(serializers.Serializer):
+    users_email = serializers.ListField(required=True)
+    def validate(self, data):
+        l = data.get('users_email')
+        for i in l:
+            if not i["role"] in ['Product owner', 'Scrum master', 'Project manager', 'Team member']:
+                raise ValidationError({"role": "should be ('Product owner', 'Scrum master', 'Project manager' or 'Team member')"})
+        return data
+
+
+class ProjectRolesSerializer(serializers.Serializer):
+    role = serializers.CharField(required=True)
+    def validate(self, data):
+        rl = data.get('role')
+        if not rl in ['Product owner', 'Scrum master', 'Project manager', 'Team member']:
+            raise ValidationError({"role": "should be ('Product owner', 'Scrum master', 'Project manager' or 'Team member')"})
+        return data
 
 
 class TaskSerializer(serializers.Serializer):

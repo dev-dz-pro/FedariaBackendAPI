@@ -1,9 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from .models import InvitedProjects, Portfolio, Project, Workspace, BoardActivities
+from .models import InvitedProjects, Portfolio, Project, Workspace, BoardActivities, Board
 from vifApp.models import User, UserNotification
-from .serializers import (PortfolioSerializer, KanbanProjectSerializer, ProjectSerializer, 
+from .serializers import (PortfolioSerializer, KanbanProjectSerializer, ProjectSerializer, BoardActivitiesSerializer,
                         BoardSerializer, WorkspaceSerializer)
 from rest_framework import status
 import jwt
@@ -11,9 +11,14 @@ from threading import Thread
 from django.db.utils import IntegrityError
 from django.conf import settings
 from vifApp.utils import VifUtils
-import requests
+import pandas as pd
 from django.core.mail import send_mass_mail
 from urllib.parse import urlparse
+from datetime import datetime as dt
+import csv
+import requests
+from django.http import HttpResponse
+
 
 '''
 WORKSPACE PART
@@ -403,32 +408,175 @@ class PinUnpinProject(APIView):
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
 
-# class ProjectActivities(APIView):
-#     def get(self, request, workspace_uid, portfolio_uid, project_uid):
-#         payload = permission_authontication_jwt(request)
-#         user = User.objects.filter(id=payload['id']).first()
-#         project = Project.objects.filter(project_uuid=project_uid, portfolio__workspace__workspace_user=user, portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid).first()
-#         if project:
-            
-#             # Create the HttpResponse object with the appropriate CSV header.
-#             import csv
-#             from django.http import HttpResponse
-#             response = HttpResponse(
-#                 content_type='text/csv',
-#                 headers={'Content-Disposition': 'attachment; filename="somefilename.csv"'},
-#             )
-#             writer = csv.writer(response)
-#             writer.writerow(['Username', 'Activity Dype', 'Activity Description', 'Activity Date'])
-            
-#             boards = BoardActivities.objects.filter(board__prj=project)
-#             for brd in boards:
-#                 writer.writerow([brd.activity_user_email, brd.activity_type, brd.activity_description, brd.activity_date])
-#             ###############################
+class ExportProjectActivities(APIView):
+    def get(self, request, workspace_uid, portfolio_uid, project_uid):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        project = Project.objects.filter(portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
+        
+        prj_user = project.portfolio.workspace.workspace_user 
+        if user.email in project.invited_users:
+            current_user_role = project.invited_users[user.email]["role"]
+        elif user == prj_user:
+            current_user_role = 'Project manager'
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'You are not invited to this project'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+        
+        if current_user_role in ['Product owner', 'Project manager', 'Scrum master']:
 
-#             return response
-#         else:
-#             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Project or portfolio not exists'}
-#             return Response(response, status.HTTP_400_BAD_REQUEST)
+            if not "board" in request.GET:
+                board = None
+            else:
+                board = request.GET["board"]
+            if not "type_of_activity" in request.GET:
+                type_of_activity = None
+            else:
+                type_of_activity = request.GET["type_of_activity"]
+            if not "user_email" in request.GET:
+                user_email = None
+            else:
+                user_email = request.GET["user_email"]
+
+            if project:
+                response = HttpResponse(content_type='text/csv', headers={'Content-Disposition': f'attachment; filename="Project_activites_{project.name}.csv"'},)
+                writer = csv.writer(response)
+                boards = self.board_project_activities(project, board, type_of_activity, user_email)
+                writer.writerow(['Name', 'Email', 'Activity description', 'Activity type', 'Activity date'])
+                for brd in boards:
+                    writer.writerow(brd.values())
+                return response
+            else:
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Project or portfolio not exists'}
+                return Response(response, status.HTTP_400_BAD_REQUEST)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'You are not allowed to download project activites'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+    def board_project_activities(self, project, board, type_of_activity, user_email):
+            dct = {"board__prj": project}
+            if board:
+                dct["board__name"] = board
+            if type_of_activity:
+                dct["activity_type"] = type_of_activity
+            if user_email:
+                dct["activity_user_email"] = user_email
+            boards = BoardActivities.objects.filter(**dct) 
+            return BoardActivitiesSerializer(boards, many=True).data
+
+
+class ExportBoard(APIView):
+    def get(self, request, workspace_uid, portfolio_uid, project_uid):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        project = Project.objects.filter(portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
+        prj_user = project.portfolio.workspace.workspace_user 
+        if user.email in project.invited_users:
+            current_user_role = project.invited_users[user.email]["role"]
+        elif user == prj_user:
+            current_user_role = 'Admin'
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'You are not invited to this project'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+        if current_user_role in ['Admin', 'Product owner', 'Project manager', 'Scrum master']:
+            board_name = request.GET["board"]
+            board = Board.objects.filter(prj=project, name=board_name).first()
+            if board:
+                response = HttpResponse(content_type='text/csv', headers={'Content-Disposition': f'attachment; filename="Project_activites_{project.name}.csv"'},)
+                writer = csv.writer(response)
+                writer.writerow(['portfolio_name', 'project_name', 'board_name', 'col_name', 'name', 'created_at', 'story', 'due_date', 'aging', 'files', 'labels', 'subtasks', 'assignees'])
+                for col in board.board:
+                    for col_name, tsks in col.items():
+                        for tsk in tsks:
+                            aging = None
+                            if "first_move_date" in tsk and "last_move_date" in tsk:
+                                d1 = dt.strptime(tsk["first_move_date"].split(".")[0], '%Y-%m-%dT%H:%M:%S')
+                                d2 = dt.strptime(tsk["last_move_date"].split(".")[0], '%Y-%m-%dT%H:%M:%S')
+                                aging = str(d2-d1)
+                            writer.writerow((board.prj.portfolio.portfolio_name, board.prj.name, board_name, 
+                                        col_name, tsk["name"], tsk["created_at"], 
+                                        tsk["story"], tsk["due_date"], aging, tsk["files"], 
+                                        tsk["labels"], tsk["subtasks"], tsk["assignees"]))
+                return response
+            else:
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Board not exists.'}
+                return Response(response, status.HTTP_400_BAD_REQUEST)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'You are not allowed to download project activites'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class ImportBoard(APIView):
+    def post(self, request, workspace_uid, portfolio_uid, project_uid):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        project = Project.objects.filter(portfolio__workspace__workspace_uuid=workspace_uid, 
+                                        portfolio__portfolio_uuid=portfolio_uid, 
+                                        project_uuid=project_uid).first()
+        prj_user = project.portfolio.workspace.workspace_user 
+        if user.email in project.invited_users:
+            current_user_role = project.invited_users[user.email]["role"]
+        elif user == prj_user:
+            current_user_role = 'Admin'
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'You are not invited to this project'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+        if current_user_role in ['Admin', 'Product owner', 'Project manager', 'Scrum master']:
+            try:
+                board_csv_file = request.FILES['board_csv_file']
+                dataframe1 = pd.read_csv(board_csv_file.temporary_file_path())
+                brd_json = {}
+                for i, row in dataframe1.iterrows():
+                    if i == 0:
+                        try:
+                            board = Board.objects.create(prj=project, name=row["board_name"])
+                        except IntegrityError:
+                            if "board_name" in request.data and request.data["board_name"]:
+                                board = Board.objects.create(prj=project, name=request.data["board_name"])
+                            else:
+                                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Board name is required'}
+                                return Response(response, status.HTTP_400_BAD_REQUEST)
+
+                    if row["col_name"] in brd_json:
+                        brd_json[row["col_name"]].append({
+                                "name": row["name"],
+                                "files": eval(row["files"]),
+                                "story": row["story"],
+                                "labels": eval(row["labels"]),
+                                "due_date": row["due_date"],
+                                "subtasks": eval(row["subtasks"]),
+                                "assignees": eval(row["assignees"]),
+                                "created_at": row["created_at"]
+                            })
+                    else:
+                        brd_json[row["col_name"]] = [
+                            {
+                                "name": row["name"],
+                                "files": eval(row["files"]),
+                                "story": row["story"],
+                                "labels": eval(row["labels"]),
+                                "due_date": row["due_date"],
+                                "subtasks": eval(row["subtasks"]),
+                                "assignees": eval(row["assignees"]),
+                                "created_at": row["created_at"]
+                            }
+                        ]
+                if brd_json:
+                    board.board = [{k: v} for k, v in brd_json.items()]
+                    board.save()
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Board imported successfuly.', "data": []}
+                return Response(response)
+            except IntegrityError:
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Board name already exists'}
+                return Response(response, status.HTTP_400_BAD_REQUEST)
+            except:
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+                return Response(response, status.HTTP_400_BAD_REQUEST)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'You are not allowed to download project activites'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
 
 '''
 Tasks PART
@@ -455,11 +603,123 @@ class UplaodFileAWS(APIView):
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'You are not invited to this project'}
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
+
+'''
+MICROSOFT CALENDAR PART
+'''
+class GetMSCalendarEvents(APIView):
+    def post(self, request):
+        permission_authontication_jwt(request)
+        # user = User.objects.filter(id=payload['id']).first()
+        url = "https://graph.microsoft.com/v1.0/me/events?$select=subject,body,bodyPreview,organizer,attendees,start,end,location"
+        access_token = request.data['token']
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Calendar events fetched successfuly.', "data": res.json()}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+class GetMSEvent(APIView):
+    def post(self, request):
+        permission_authontication_jwt(request)
+        # user = User.objects.filter(id=payload['id']).first()
+        url = "https://graph.microsoft.com/v1.0/me/events/{}".format(request.data["event_id"])
+        access_token = request.data['token']
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Calendar events fetched successfuly.', "data": res.json()}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class DeleteMSEvent(APIView):
+    def delete(self, request):
+        permission_authontication_jwt(request)
+        # user = User.objects.filter(id=payload['id']).first()
+        url = "https://graph.microsoft.com/v1.0/me/events/{}".format(request.data["event_id"])
+        access_token = request.data['token']
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.delete(url, headers=headers)
+        if res.status_code == 204:
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Event deleted successfuly.', "data": []}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class CancelMSEvent(APIView):
+    def post(self, request):
+        permission_authontication_jwt(request)
+        # user = User.objects.filter(id=payload['id']).first()
+        url = "https://graph.microsoft.com/v1.0/me/events/{}/cancel".format(request.data["event_id"])
+        access_token = request.data['token']
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.post(url, headers=headers)
+        if res.status_code == 202:
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Event cancelled successfuly.', "data": []}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+'''
+GOOGLE CALENDAR PART
+'''
+class GetGGLEvents(APIView):
+    def post(self, request):
+        permission_authontication_jwt(request)
+        url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/"
+        access_token = request.data['token']
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Calendar events fetched successfuly.', "data": res.json()["items"]}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class GetDeleteGGLEvent(APIView):
+    def post(self, request):
+        permission_authontication_jwt(request)
+        url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/{}".format(request.data["event_id"])
+        access_token = request.data['token']
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Calendar events fetched successfuly.', "data": res.json()}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        permission_authontication_jwt(request)
+        url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/{}".format(request.data["event_id"])
+        access_token = request.data['token']
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.delete(url, headers=headers)
+        if res.status_code == 204:
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Event deleted successfuly.', "data": []}
+            return Response(response)
+        else:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
     
+
+
 '''
 Authontication
 '''
-
 def permission_authontication_jwt(request):
     try:
         token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]

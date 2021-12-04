@@ -109,6 +109,7 @@ DATABASES = {
 
 ALLOWED_HOSTS = [os.environ.get('API_HOST'), "localhost", "127.0.0.1", "https://websocketking.com", "http://localhost:3000", os.environ.get("front_domain")]
 ALLOWED_CIDR_NETS = ['172.24.0.0/16']
+FILE_UPLOAD_HANDLERS = ['django.core.files.uploadhandler.TemporaryFileUploadHandler',]
 
 
 # Password validation

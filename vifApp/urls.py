@@ -1,14 +1,18 @@
 from django.urls import path, include
 from .views import (RegisterView, LoginView, HomeView,
-                    SettingsView, ProfileView, EmailVerifyView, 
+                    SettingsView, ProfileView, EmailVerifyView, ChangeUserStatus,
                     ResetPasswordView, NewPassView, ProfileInfoUpdate, EmailVerifyResendView, Google_SocAuthTest, Gitlab_SocAuthTest,
-                    ProfileImageUpdate, SettingsInfoUpdate, TokenRefreshView, ProfileSetCompanyUpdate, Github_SocAuthTest)
+                    ProfileImageUpdate, SettingsInfoUpdate, TokenRefreshView, ProfileSetCompanyUpdate, Github_SocAuthTest, GetUserNotifications)
 
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name="register"),
     path('login/', LoginView.as_view(), name="login"),
     path('home/', HomeView.as_view()),
+
+    path('user/notifications/', GetUserNotifications.as_view(), name="user-notification"),
+    path('user/change_status/', ChangeUserStatus.as_view(), name="change-status"),
+    
 
     path('token/refresh/', TokenRefreshView.as_view()),
 

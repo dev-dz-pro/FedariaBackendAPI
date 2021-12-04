@@ -82,3 +82,11 @@ class InvitedProjects(models.Model):
 
 
 
+class ProjectOnlineUsers(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    is_online = models.BooleanField(default=False)
+    class Meta:
+        unique_together = ('user', 'project') 
+    def __str__(self):
+        return self.user.email + "    --> Online status  (" + str(self.online_status) + ")"
