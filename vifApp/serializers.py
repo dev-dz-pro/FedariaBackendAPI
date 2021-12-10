@@ -58,6 +58,28 @@ class CompanySerializer(serializers.Serializer):
     company_email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
     company_name = serializers.CharField(required=True)
 
+
+
+class UpdateAccountSerializer(serializers.Serializer):
+    model = User
+    company_email = serializers.EmailField(max_length=None, min_length=None, allow_blank=True)
+    company_name = serializers.CharField(required=False, allow_blank=True)
+    job_title = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=True)
+    phone = serializers.CharField(allow_blank=True)
+    def validate(self, data):
+        value = data.get('phone')
+        if value:
+            reg = re.compile(r'^\+?1?\d{9,15}$')
+            if reg.match(value):  
+                return data
+            else:
+                raise ValidationError({"Phone number": "must be entered in the format: '+999999999'. Up to 15 digits allowed."})
+        else:
+            return data
+
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     model = User
     old_password = serializers.CharField(required=True)
@@ -83,7 +105,7 @@ class UpdateProfileSerializer(serializers.Serializer):
 class UpdateProfileImageSerializer(serializers.Serializer):
     model = User
     profile_img_url = serializers.FileField(max_length=None, allow_empty_file=False)
-    profile_title = serializers.CharField(allow_blank=True, allow_null=True)
+    # profile_title = serializers.CharField(allow_blank=True, allow_null=True)
 
 
 class ResetPasswordSerializer(serializers.Serializer):

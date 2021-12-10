@@ -22,7 +22,7 @@ urlpatterns = [
 
     # path('create_task/', views.CreateTaskView.as_view(), name="create-task"), # wss
     # path('task/<str:pf>/<str:prjct>/<str:brd>/<int:col_pos>/<int:task_pos>/', views.GetTaskView.as_view(), name="get-task"),
-    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/upload_file/', views.UplaodFileAWS.as_view(), name="aws-files"), 
+    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/upload_file/', views.UplaodFileAWS.as_view(), name="aws-files"),
 
     # path('change_tasks_col/<str:pf>/<str:prjct>/<str:from_col>/<str:tasks_ids>/<str:to_col>/<int:in_pos>/', views.ChangeTasksCol.as_view(), name="change-tasks-col"), # wss
     path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/export_activities/', views.ExportProjectActivities.as_view(), name="project-activities-csv"), 

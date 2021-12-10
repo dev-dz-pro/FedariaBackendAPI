@@ -1,6 +1,7 @@
 from django.db import models
 from vifApp.models import User
 from django.utils import timezone
+from django.contrib.postgres.fields import ArrayField
 import datetime
 import uuid
 
@@ -81,12 +82,31 @@ class InvitedProjects(models.Model):
         return self.iuser.email + "    --> Invitation from  (" + self.inviter_project.portfolio.workspace.workspace_user.email + ")    --> Project  (" + self.inviter_project.name + ")"
 
 
+# class ProjectOnlineUsers(models.Model):
+#     user = models.ForeignKey(User, on_delete=models.CASCADE)
+#     project = models.ForeignKey(Project, on_delete=models.CASCADE)
+#     is_online = models.BooleanField(default=False)
+#     class Meta:
+#         unique_together = ('user', 'project') 
+#     def __str__(self):
+#         return self.user.email + "    --> Online status  (" + str(self.is_online) + ")"
 
-class ProjectOnlineUsers(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
-    is_online = models.BooleanField(default=False)
-    class Meta:
-        unique_together = ('user', 'project') 
+
+class ProjectGroupeChat(models.Model):
+    prj = models.ForeignKey(Project, on_delete=models.CASCADE)
+    auditor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    content = models.TextField(unique=False)
+    attachments = ArrayField(models.URLField(max_length=600), blank=True, null=True)
     def __str__(self):
-        return self.user.email + "    --> Online status  (" + str(self.online_status) + ")"
+        return self.content[:20] 
+
+
+class UserDirectMessages(models.Model):
+    sender_user = models.ForeignKey(User, on_delete=models.CASCADE)
+    receiver_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='+')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    content = models.TextField(unique=False)
+    attachments = ArrayField(models.URLField(max_length=600), blank=True, null=True)
+    def __str__(self):
+        return self.content[:20] 

@@ -16,7 +16,8 @@ from threading import Thread
 from urllib.parse import parse_qs
 from .serializers import (UserSerializer, ChangePasswordSerializer, ResetPasswordSerializer, 
                         UpdateProfileSerializer, UpdateProfileImageSerializer, LoginSerializer, 
-                        CompanySerializer, UserNotificationSerializer, UserStatusSerializer)
+                        CompanySerializer, UserNotificationSerializer, UserStatusSerializer,
+                        UpdateAccountSerializer)
 
 
 UNAUTHONTICATED = 'Unauthenticated!'
@@ -46,8 +47,8 @@ class RegisterView(APIView):
             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
             'iat': datetime.datetime.utcnow()
         }
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token # will add it to var inv
+        token = jwt.encode(payload, settings.SECRET_KEY+settings.SECRET_LINKTOKEN_KEY, algorithm='HS256')
+        absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token 
         email_body = 'Hi '+ user.name + ', Click the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Vifbox account activation', "to_email": [user.email]}
         Thread(target=VifUtils.send_email, args=(data,)).start()
@@ -70,7 +71,7 @@ class EmailVerifyResendView(APIView):
             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
             'iat': datetime.datetime.utcnow()
         }
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+        token = jwt.encode(payload, settings.SECRET_KEY+settings.SECRET_LINKTOKEN_KEY, algorithm='HS256')
         absurl = os.environ.get("front_domain") + "/verify-email/?token=" + token 
         email_body = 'Hi '+ user.name + ' Use the link below to verify your email\n' + absurl
         data = {'email_body': email_body, 'email_subject': 'Verify your email', "to_email": [user.email]}
@@ -88,7 +89,7 @@ class EmailVerifyView(APIView):
     def get(self, request):
         token = request.GET["token"]
         try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(token, settings.SECRET_KEY+settings.SECRET_LINKTOKEN_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload["id"])
             
             if not user.is_verified:
@@ -106,18 +107,11 @@ class EmailVerifyView(APIView):
             else:
                 response = {'message': 'Email already activated'}
             return Response(response)
-        except jwt.DecodeError:
+        except Exception:
             response = {
                 'status': 'error',
                 'code': status.HTTP_403_FORBIDDEN,
                 'message': 'Token Expired!'
-            }
-            return Response(response, status.HTTP_403_FORBIDDEN)
-        except jwt.ExpiredSignatureError:
-            response = {
-                'status': 'error',
-                'code': status.HTTP_403_FORBIDDEN,
-                'message': UNAUTHONTICATED
             }
             return Response(response, status.HTTP_403_FORBIDDEN)
 
@@ -168,6 +162,7 @@ class LoginView(APIView):
             'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
         }
         access_token = jwt.encode(payload_access, settings.SECRET_KEY, algorithm='HS256')
+        print(settings.SECRET_KEY, settings.SECRET_REFRESH_KEY)
         refresh_token = jwt.encode(payload_refresh, settings.SECRET_KEY+settings.SECRET_REFRESH_KEY, algorithm='HS256')
         return Response({"access": access_token, "refresh": refresh_token})
 
@@ -533,6 +528,96 @@ class SettingsInfoUpdate(APIView):
 
 
 
+
+
+class UpdateAccount(APIView):
+    def put(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = UpdateAccountSerializer(data=request.data)
+        if serializer.is_valid():
+            user_data = serializer.data
+            user.company_email = user_data["company_email"]
+            user.company_name = user_data["company_name"]
+            user.profile_title = user_data["job_title"]
+            user.name = user_data["name"]
+            user.phone_number = user_data["phone"]
+            user.save()
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Profile image updated successfully',
+                'data': []
+            }
+            return Response(response)
+        else:
+            err = list(serializer.errors.items())
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+            }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+class AccountImageUpdate(APIView):
+    def put(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = UpdateProfileImageSerializer(data=request.data)
+        if serializer.is_valid():
+            file = request.FILES['profile_img_url']
+            utls_cls = VifUtils()
+            img_url = utls_cls.aws_upload_file(user=user, file=file)
+            user.profile_image = img_url
+            user.save()
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Profile image updated successfully',
+                'data': {
+                    "profile_img_url": img_url
+                }
+            }
+            return Response(response)
+        else:
+            err = list(serializer.errors.items())
+            response = {
+                    'status': 'error',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                    'message': '(' + err[0][0] + ') ' + err[0][1][0]
+                }
+            return Response(response, status.HTTP_400_BAD_REQUEST)
+
+
+
+class AccountView(APIView):
+    def get(self, request):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        prf_img = user.get_presigned_url_img() 
+        if user.profile_image != prf_img:
+            user.profile_image = prf_img
+            user.save()
+        response = {
+            'status': 'success',
+            'code': status.HTTP_200_OK,
+            'data': {
+                "name": user.name,
+                "username": user.username,
+                "email": user.email,
+                "profile_img_url": user.profile_image,
+                "is_verified": user.is_verified,
+                "status": user.status,
+                "company_email": user.company_email,
+                "company_name": user.company_name,
+                "job_title": user.profile_title ,
+                "phone": user.phone_number
+            }
+        }
+        return Response(response)
+
+
 class ResetPasswordView(APIView):
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
@@ -546,7 +631,7 @@ class ResetPasswordView(APIView):
                     'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5),
                     'iat': datetime.datetime.utcnow()
                 }
-                token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+                token = jwt.encode(payload, settings.SECRET_KEY+settings.SECRET_LINKTOKEN_KEY, algorithm='HS256')
                 absurl = os.environ.get("front_domain") + "/new-password/?token=" + token
                 email_body = 'Hi '+ user.name + ' Use the link below to Change your password\n' + absurl
                 data = {'email_body': email_body, 'email_subject': 'Vifbox Reset password', "to_email": [user.email]}
@@ -579,7 +664,7 @@ class NewPassView(APIView):
     def post(self, request):
         try:
             token = request.GET["token"]
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(token, settings.SECRET_KEY+settings.SECRET_LINKTOKEN_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload["id"])
             new_pass = request.data["new_pass"]
             confirm_pass = request.data["confirm_new_pass"]
@@ -658,6 +743,7 @@ class ChangeUserStatus(APIView):
                     'message': '(' + err[0][0] + ') ' + err[0][1][0]
             }
             return Response(response, status.HTTP_400_BAD_REQUEST)
+
 
 def permission_authontication_jwt(request):
     try:

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import Board, BoardActivities, Portfolio, Project, Workspace
+from .models import Board, BoardActivities, Portfolio, Project, UserDirectMessages, Workspace, ProjectGroupeChat
+from vifApp.models import User
 
 
 
@@ -93,6 +94,22 @@ class ProjectRolesSerializer(serializers.Serializer):
         if not rl in ['Product owner', 'Scrum master', 'Project manager', 'Team member']:
             raise ValidationError({"role": "should be ('Product owner', 'Scrum master', 'Project manager' or 'Team member')"})
         return data
+
+
+class GroupeChatSerializer(serializers.ModelSerializer):
+    auditor_name = serializers.CharField(read_only=True, source="auditor.name")
+    auditor_email = serializers.CharField(read_only=True, source="auditor.email")
+    class Meta:
+        model = ProjectGroupeChat
+        fields = ("auditor_name", "auditor_email", "content", "attachments", "timestamp")
+    
+
+class UserMsgsSerializer(serializers.ModelSerializer):
+    sender_user = serializers.CharField(read_only=True, source="sender_user.email")
+    receiver_user = serializers.CharField(read_only=True, source="receiver_user.email")
+    class Meta:
+        model = UserDirectMessages
+        fields = ("sender_user", "receiver_user", "content", "attachments", "timestamp")
 
 
 class TaskSerializer(serializers.Serializer):

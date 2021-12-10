@@ -22,7 +22,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY') 
-SECRET_REFRESH_KEY = "" #os.environ.get('SECRET_REFRESH_KEY') TODO  TO SET IN DEPLOYMENT
+SECRET_REFRESH_KEY = os.environ.get('SECRET_REFRESH_KEY')
+SECRET_LINKTOKEN_KEY = os.environ.get('SECRET_LINKTOKEN_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -80,11 +81,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'vifbox.wsgi.application'
 ASGI_APPLICATION = "vifbox.asgi.application"
 
+
+REDIS_HOST = os.environ.get('REDIS_DOMAIN')
+REDIS_PORT = os.environ.get('REDIS_PORT')
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [(os.environ.get('REDIS_DOMAIN') , os.environ.get('REDIS_PORT'))],
+            "hosts": [(REDIS_HOST ,REDIS_PORT)],
         },
     },
 }
@@ -168,8 +173,8 @@ AUTH_USER_MODEL = 'vifApp.User'
 CORS_ALLOWED_ORIGINS = [os.environ.get("front_domain"), "http://localhost:3000"]  # CORS_ORIGIN_ALLOW_ALL
 CORS_ALLOW_CREDENTIALS = True
 
-ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY_ID')
-SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 REGION_NAME = os.environ.get('REGION_NAME')
 

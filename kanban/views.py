@@ -13,7 +13,6 @@ from django.conf import settings
 from vifApp.utils import VifUtils
 import pandas as pd
 from django.core.mail import send_mass_mail
-from urllib.parse import urlparse
 from datetime import datetime as dt
 import csv
 import requests
@@ -610,7 +609,6 @@ MICROSOFT CALENDAR PART
 class GetMSCalendarEvents(APIView):
     def post(self, request):
         permission_authontication_jwt(request)
-        # user = User.objects.filter(id=payload['id']).first()
         url = "https://graph.microsoft.com/v1.0/me/events?$select=subject,body,bodyPreview,organizer,attendees,start,end,location"
         access_token = request.data['token']
         headers = {"Authorization": f"Bearer {access_token}"}
@@ -625,7 +623,6 @@ class GetMSCalendarEvents(APIView):
 class GetMSEvent(APIView):
     def post(self, request):
         permission_authontication_jwt(request)
-        # user = User.objects.filter(id=payload['id']).first()
         url = "https://graph.microsoft.com/v1.0/me/events/{}".format(request.data["event_id"])
         access_token = request.data['token']
         headers = {"Authorization": f"Bearer {access_token}"}
@@ -641,7 +638,6 @@ class GetMSEvent(APIView):
 class DeleteMSEvent(APIView):
     def delete(self, request):
         permission_authontication_jwt(request)
-        # user = User.objects.filter(id=payload['id']).first()
         url = "https://graph.microsoft.com/v1.0/me/events/{}".format(request.data["event_id"])
         access_token = request.data['token']
         headers = {"Authorization": f"Bearer {access_token}"}
@@ -657,7 +653,6 @@ class DeleteMSEvent(APIView):
 class CancelMSEvent(APIView):
     def post(self, request):
         permission_authontication_jwt(request)
-        # user = User.objects.filter(id=payload['id']).first()
         url = "https://graph.microsoft.com/v1.0/me/events/{}/cancel".format(request.data["event_id"])
         access_token = request.data['token']
         headers = {"Authorization": f"Bearer {access_token}"}

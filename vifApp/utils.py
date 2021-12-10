@@ -21,7 +21,7 @@ class VifUtils:
 
     def aws_upload_file(self, user, file, for_profile=True):
         if for_profile:
-            if user.profile_image.startswith("https://vifbox-backend.s3.amazonaws.com"):
+            if user.profile_image.startswith("https://vifbox-backend.s3.amazonaws.com"):  # this condition for upqding profile image qnd not creqting nez one
                 file_aws_name = urlparse(user.profile_image).path[1:]
             else:
                 timestr = time.strftime("%Y%m%d%H%M%S")

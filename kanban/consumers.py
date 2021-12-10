@@ -1,19 +1,23 @@
 import json
 from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from .serializers import (TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer, 
-                        BoardActivitiesSerializer, ProjectRolesSerializer, InviteUsersSerializer)
-from .models import Portfolio, Project, Board, InvitedProjects, BoardActivities, ProjectOnlineUsers
+from .serializers import (TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer, UserMsgsSerializer, 
+                        BoardActivitiesSerializer, ProjectRolesSerializer, InviteUsersSerializer, GroupeChatSerializer)
+from .models import Portfolio, Project, Board, InvitedProjects, BoardActivities, UserDirectMessages
 from vifApp.models import User, UserNotification
+from .models import ProjectGroupeChat
 from channels.db import database_sync_to_async
 from django.db.utils import IntegrityError
 import hashlib
 from datetime import datetime as dt
 from django.core.mail import send_mass_mail
-from django.conf import settings
+from django.conf import Settings, settings
+import redis
 from vifApp.utils import VifUtils
 from urllib.parse import urlparse
 import requests
+from django.core.paginator import Paginator, EmptyPage
+from django.db.models import Q
 
 
 class BoardConsumer(AsyncJsonWebsocketConsumer):
@@ -24,16 +28,26 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         self.ws = prms_dict['workspace']
         self.pf = prms_dict['portfolio']
         self.pj = prms_dict['project']
+        self.r = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
         try:
-            self.room_name = self.ws + self.pf + self.pj
+            self.room_name = self.ws + self.pf + self.pj + settings.SECRET_LINKTOKEN_KEY
             encoded=self.room_name.encode()
-            self.room_group_name = 'team_%s' % hashlib.sha256(encoded).hexdigest()
+            self.room_group_name = hashlib.sha256(encoded).hexdigest()
+
+            my_room = self.user.email + settings.SECRET_LINKTOKEN_KEY
+            encoded=my_room.encode()
+            self.my_room_name = hashlib.sha256(encoded).hexdigest()
+
             self.project_owner_user, self.project = await self.project_owner(self.ws, self.pf, self.pj)
         except PermissionError:
             return await self.disconnect(close_code=403)
         # Join room group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-        await self.got_online()
+        # For direct messagges
+        await self.channel_layer.group_add(self.my_room_name, self.channel_name)
+        # notify others im online
+        await self.channel_layer.group_send(self.room_group_name, {"type": "notify.online", 'email': self.user.email, "name": self.user.name, 'request_id': "user-online"})
+        self.r.rpush('online_users', self.user.email)
         await self.accept()
 
 
@@ -41,7 +55,8 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         # Leave room group
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-        await self.got_offline()
+        await self.channel_layer.group_discard(self.my_room_name, self.channel_name)
+        self.r.lrem("online_users", 0, self.user.email)
 
 
 
@@ -65,28 +80,16 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         else:
             raise PermissionError("You are not invited to this project.")
 
-    @sync_to_async
-    def got_online(self):   
-        usr = ProjectOnlineUsers.objects.filter(user=self.user, project=self.project)
-        if self.user.email in self.project.invited_users:
-            if not usr:
-                ProjectOnlineUsers.objects.create(user=self.user, project=self.project, is_online=True)
-            else:
-                usr.update(is_online=True) 
-        else:
-            usr.delete()
 
-    @sync_to_async
-    def got_offline(self): 
-        usr = ProjectOnlineUsers.objects.filter(user=self.user, project=self.project)  
-        if usr:
-            usr.update(is_online=False) 
+    async def notify_online(self, event):
+        response =  {'email': event["email"], "name": event["name"], 'request_id': event['request_id']}
+        await self.send_json(response)
 
 
     # for single user response
     async def single_user_response(self, request_id, data):
-        if request_id == "get-online-users":
-            await self.get_online_users(request_id)
+        if request_id == "project-online-users":
+            await self.project_online_users(request_id)
         elif request_id == "get-board":
             await self.get_board(request_id, data)
         elif request_id == "get-board-tasks":
@@ -113,6 +116,10 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.get_project_activities(request_id, data)
         elif request_id == "export-board":
             await self.export_board(request_id, data)
+        elif request_id == "get-chat-messages":
+            await self.get_chat_messages(request_id, data)
+        elif request_id == "get-inbox":
+            await self.get_inbox(request_id, data)
         else:
             if request_id == "create-task":
                 is_updated = await self.create_task(request_id, data)
@@ -140,13 +147,17 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 is_updated = await self.change_col_order(request_id, data)
             elif request_id == "invite-users":
                 is_updated = await self.invite_users(request_id, data)
+            elif request_id == "groupe-chat":
+                is_updated = await self.groupe_chat(request_id, data)
+            elif request_id == "direct-message":
+                is_updated = await self.direct_msg(request_id, data)
             if is_updated:
                 await self.channel_layer.group_send(self.room_group_name, {"type": "notify.team", 'user': self.user.email , 'request_id': request_id, "notification": "update"})
 
         
 
     async def notify_team(self, event):
-        response =  {'user': event['user'] , 'request_id': event['request_id'], "updated": True}
+        response =  {'user': event['user'] , 'request_id': event['request_id'], "update": True}
         await self.send_json(response)
 
 
@@ -155,18 +166,11 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     '''
 
 
-    async def get_online_users(self, request_id):
-        data = await self.online_users_project()
+    async def project_online_users(self, request_id):
+        online_users = set(self.r.lrange("online_users", 0, -1))
+        data = [{"user_email": x.decode("utf8")} for x in online_users]
         response = {'request_id': request_id, 'data': data}
         await self.send_json(response)
-
-    @database_sync_to_async
-    def online_users_project(self):
-        prj_users = self.project.projectonlineusers_set.all()
-        data = []
-        for x in prj_users:
-            data.append({"user_email": x.user.email, "user_name": x.user.name, "online": x.is_online, "status": x.user.status})
-        return data
 
 
 
@@ -881,7 +885,11 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                             tasks_list = board.board[i][user_data["col"]]
                             tasks_list.append(my_task)
                             await database_sync_to_async(self.save_db)(board)
-                            await self.add_task_to_calendar(my_task, token=data["calendar"]["token"])
+                            calendar = data["calendar"]
+                            if calendar["is_google"]:
+                                await self.add_task_to_ggl_calendar(my_task, token=calendar["token"])
+                            else:
+                                await self.add_task_to_ms_calendar(my_task, token=calendar["token"])
                             await database_sync_to_async(self.notify_assignees)(data["assignees"], task_title)
                             await database_sync_to_async(BoardActivities.objects.create)(board=board, activity_user_email=self.user.email, activity_type="create-task", activity_description=f"({task_title}) Task has been created.")
                             notification_text, notification_url = f"New Task ({task_title}) has been created on board ({board.name}).", "http://will-be-front-board-page-route.com"
@@ -919,34 +927,50 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         return created_time, due_date
 
 
-    async def add_task_to_calendar(self, data, token):
+    async def add_task_to_ms_calendar(self, data, token):
         header = {"Authorization": "Bearer " + token, "Content-type": "application/json"}
-        attendees = [{
-                        "emailAddress": {
-                            "address": x,
-                            "name": x.split("@")[0]
-                        },
-                    "type": "required"
-                    } for x in data["assignees"]]
+        attendees = [{"emailAddress": {"address": x, "name": x.split("@")[0]}, "type": "required"} for x in data["assignees"]]
         info = {
-            "subject": data["name"],
+            "subject": "Task : "+ data["name"],
             "body": {
                 "contentType": "HTML",
                 "content": data["name"]
             },
             "start": {
-                "dateTime": data["created_at"],
-                "timeZone": "Pacific Standard Time"
+                "dateTime": data["due_date"],
+                "timeZone": "America/Los_Angeles"
             },
             "end": {
                 "dateTime": data["due_date"],
-                "timeZone": "Pacific Standard Time"
+                "timeZone": "America/Los_Angeles"
             },
             "attendees": attendees,
-            "allowNewTimeProposals": True,
-            "transactionId": "0A163156-7762-4BEB-A1C6-719EA81755A7"
+            "allowNewTimeProposals": True
         }
-        res = requests.post("https://graph.microsoft.com/v1.0/me/events", data=json.dumps(info), headers=header)
+        requests.post("https://graph.microsoft.com/v1.0/me/events", 
+                    data=json.dumps(info), headers=header)
+
+    
+    async def add_task_to_ggl_calendar(self, data, token):
+        header = {"Authorization": "Bearer " + token, "Content-type": "application/json"}
+        event = {
+            'summary': "Task : "+ data["name"],
+            'description': data["name"],
+            'start': {
+                'dateTime': data["due_date"],
+                'timeZone': 'America/Los_Angeles',
+            },
+            'end': {
+                'dateTime': data["due_date"],
+                'timeZone': 'America/Los_Angeles',
+            },
+            'attendees': [{'email': x}  for x in data["assignees"]],
+            'reminders': {
+                'useDefault': True
+            },
+        }
+        requests.post("https://www.googleapis.com/calendar/v3/calendars/primary/events", 
+                    data=json.dumps(event), headers=header)
 
 
     async def update_subtask(self, request_id, data):
@@ -1146,6 +1170,7 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 file_aws_name = urlparse(file_url).path[1:]
                 utils_cls = VifUtils()
                 file_url = utils_cls.create_presigned_url(bucket_name=settings.BUCKET_NAME, region_name=settings.REGION_NAME, object_name=file_aws_name, expiration=600000)
+                # TODO to updqte task file url also
                 response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'file info.', "data": {"file_url": file_url}}
                 return await self.send_json(response)
         except:
@@ -1182,7 +1207,6 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     def dltfl(self, file_url):
         try:
             file_aws_name = urlparse(file_url).path[1:]
-            print(file_aws_name)
             utils_cls = VifUtils()
             is_deleted = utils_cls.delete_from_s3(self.project_owner_user, file_aws_name)
             if is_deleted:
@@ -1191,6 +1215,91 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
                 return False
         except:
             raise FileNotFoundError("File not found")
+
+    '''
+    Group Messages Part
+    '''
+    async def groupe_chat(self, request_id, data):
+        try:
+            await database_sync_to_async(ProjectGroupeChat.objects.create)(prj=self.project, auditor=self.user, content=data["content"], attachments=data["attachments"])
+            response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'New message in group chat.', "data": {"auditor_name": self.user.name, "auditor_email": self.user.email, "content": data["content"], "attachments": data["attachments"]}}
+            await self.send_json(response)
+            return True
+        except Exception:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': "bad request"}
+            await self.send_json(response)
+            return False
+
+
+    async def get_chat_messages(self, request_id, data):
+        try:      
+            json_data = await database_sync_to_async(self.get_chat_data)(int(data["page"]))
+            response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Group chat.', "data": json_data}
+            await self.send_json(response)
+            return True
+        except Exception:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': "bad request"}
+            await self.send_json(response)
+            return False
+
+    def get_chat_data(self, page_num):
+        chat_group = ProjectGroupeChat.objects.filter(prj=self.project).order_by("-timestamp")
+        p = Paginator(chat_group, 10)
+        try:
+            page = p.page(page_num)
+        except EmptyPage:
+            page = p.page(1)
+        return GroupeChatSerializer(page.object_list, many=True).data
+
+
+    '''
+    Direct Messages Part
+    '''
+    async def direct_msg(self, request_id, data):
+        try:
+            saved = await database_sync_to_async(self.save_direct_message_db)(data)
+            if saved:
+                usrkey = data['email'] + settings.SECRET_LINKTOKEN_KEY
+                encoded=usrkey.encode()
+                usrhash = hashlib.sha256(encoded).hexdigest()
+                await self.channel_layer.group_send(usrhash, {"type": "direct.message", 'user': self.user.email , 'request_id': request_id, "data": {"message": data['message'], "attachments": data['attachments']}})
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': "bad request"}
+                await self.send_json(response)
+        except Exception:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': "bad request, message not sent."}
+            await self.send_json(response)
+
+    async def direct_message(self, event):
+        response =  {'user': event['user'] , 'request_id': event['request_id'], "data": event["data"]}
+        await self.send_json(response)
+
+    def save_direct_message_db(self, data):
+        obj_usr = User.objects.filter(email=data['email']).first()
+        if obj_usr:
+            UserDirectMessages.objects.create(sender_user=self.user, receiver_user=obj_usr, content=data['message'], attachments=data['attachments'])
+            return True
+        else:
+            return False
+
+
+    async def get_inbox(self, request_id, data):
+        try:
+            info = await database_sync_to_async(self.get_inbox_db)(data)
+            response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Direct messages.', "data": info}
+            await self.send_json(response)
+        except Exception:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': "bad request."}
+            await self.send_json(response)
+
+    def get_inbox_db(self, data):
+        query = UserDirectMessages.objects.filter(Q(sender_user=self.user) | Q(receiver_user=self.user)).order_by("-timestamp")
+        p = Paginator(query, 10)
+        try:
+            page = p.page(data["page"])
+        except EmptyPage:
+            page = p.page(1)
+        return UserMsgsSerializer(page, many=True).data
 
 
     '''
@@ -1265,6 +1374,51 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
 
 
 
+
+
+class UserConsumer(AsyncJsonWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        my_room = self.user.email + settings.SECRET_LINKTOKEN_KEY
+        encoded=my_room.encode()
+        self.my_room_name = hashlib.sha256(encoded).hexdigest()
+        await self.channel_layer.group_add(self.my_room_name, self.channel_name)
+        self.groups_names = await database_sync_to_async(self.add_user_projects)()
+        for grps in self.groups_names:
+            await self.channel_layer.group_add(grps, self.channel_name)
+        await self.accept()
+
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.my_room_name, self.channel_name)
+        for grps in self.groups_names:
+            await self.channel_layer.group_discard(grps, self.channel_name)
+
+    def add_user_projects(self):
+        groups_names = []
+        user_projects = Project.objects.filter(portfolio__workspace__workspace_user=self.user)
+        for prj in user_projects:
+            self.room_name = str(prj.portfolio.workspace.workspace_uuid) + str(prj.portfolio.portfolio_uuid) + str(prj.project_uuid) + settings.SECRET_LINKTOKEN_KEY
+            encoded=self.room_name.encode()
+            self.room_group_name = hashlib.sha256(encoded).hexdigest()
+            groups_names.append(self.room_group_name)
+        invited_projects = InvitedProjects.objects.filter(iuser=self.user)
+        for inv_prj in invited_projects:
+            self.room_name = str(inv_prj.workspace_uid) + str(inv_prj.portfolio_uid) + str(inv_prj.project_uid) + settings.SECRET_LINKTOKEN_KEY
+            encoded=self.room_name.encode()
+            self.room_group_name = hashlib.sha256(encoded).hexdigest()
+            groups_names.append(self.room_group_name)
+        return groups_names
+
+    
+    async def direct_message(self, event):
+        response =  {'user': event['user'] , 'request_id': event['request_id'], "data": event["data"]}
+        await self.send_json(response)
+
+
+    async def notify_team(self, event):
+        response =  {'user': event['user'] , 'request_id': event['request_id'], "updated": True}
+        await self.send_json(response)
 
 
 
