@@ -59,6 +59,7 @@ class VifUtils:
 
     @staticmethod
     def generate_username(name):
+        # if name not in User do the below else return name
         ran_str = ''.join(secrets.choice(string.ascii_uppercase +
                                         string.digits+string.ascii_lowercase)
                                         for _ in range(9))

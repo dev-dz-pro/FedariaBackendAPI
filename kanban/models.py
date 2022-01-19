@@ -82,14 +82,13 @@ class InvitedProjects(models.Model):
         return self.iuser.email + "    --> Invitation from  (" + self.inviter_project.portfolio.workspace.workspace_user.email + ")    --> Project  (" + self.inviter_project.name + ")"
 
 
-# class ProjectOnlineUsers(models.Model):
-#     user = models.ForeignKey(User, on_delete=models.CASCADE)
-#     project = models.ForeignKey(Project, on_delete=models.CASCADE)
-#     is_online = models.BooleanField(default=False)
-#     class Meta:
-#         unique_together = ('user', 'project') 
-#     def __str__(self):
-#         return self.user.email + "    --> Online status  (" + str(self.is_online) + ")"
+class Wiki(models.Model):
+    wiki_project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    wiki_content = models.TextField()
+    wiki_created_at = models.DateTimeField(auto_now_add=True)
+    wiki_updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.wiki_content[:50] + "  ("+  self.wiki_project.name + ")"
 
 
 class ProjectGroupeChat(models.Model):

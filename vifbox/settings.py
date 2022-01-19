@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'drf_yasg',
     'rest_framework',
     'corsheaders',
     'channels',
@@ -92,6 +93,28 @@ CHANNEL_LAYERS = {
             "hosts": [(REDIS_HOST ,REDIS_PORT)],
         },
     },
+}
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ]
+}
+
+# SWAGGER SETTINGS
+SWAGGER_SETTINGS = {
+    'SHOW_REQUEST_HEADERS': True,
+    'SECURITY_DEFINITIONS': {
+        'JWT Authontication': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'Token_type: Bearer',
+        }
+    },
+    'USE_SESSION_AUTH': False,
+    'JSON_EDITOR': True
 }
 
 

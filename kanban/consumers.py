@@ -1,17 +1,17 @@
 import json
 from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from .serializers import (TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer, UserMsgsSerializer, 
-                        BoardActivitiesSerializer, ProjectRolesSerializer, InviteUsersSerializer, GroupeChatSerializer)
+from .serializers import (TaskSerializer, PPSerializer, BPPSerializer, PSerializer, KanbanProjectSerializer, UserMsgsSerializer, WikiUpdateSerializer,
+                        BoardActivitiesSerializer, ProjectRolesSerializer, InviteUsersSerializer, GroupeChatSerializer, WikiSerializer)
 from .models import Portfolio, Project, Board, InvitedProjects, BoardActivities, UserDirectMessages
 from vifApp.models import User, UserNotification
-from .models import ProjectGroupeChat
+from .models import ProjectGroupeChat, Wiki
 from channels.db import database_sync_to_async
 from django.db.utils import IntegrityError
 import hashlib
 from datetime import datetime as dt
 from django.core.mail import send_mass_mail
-from django.conf import Settings, settings
+from django.conf import settings
 import redis
 from vifApp.utils import VifUtils
 from urllib.parse import urlparse
@@ -120,6 +120,14 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             await self.get_chat_messages(request_id, data)
         elif request_id == "get-inbox":
             await self.get_inbox(request_id, data)
+        elif request_id == 'create-wiki':
+            await self.create_wiki(request_id, data)
+        elif request_id == 'get-wiki':
+            await self.get_wiki(request_id, data)
+        elif request_id == 'update-wiki-page': 
+            await self.update_wiki(request_id, data)
+        elif request_id == 'delete-wiki-page':
+            await self.delete_wiki(request_id, data)
         else:
             if request_id == "create-task":
                 is_updated = await self.create_task(request_id, data)
@@ -468,6 +476,84 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
     def get_pf_pj(self, board):
         return board.prj.portfolio.portfolio_name, board.prj.name
 
+    '''
+    WIKI Part
+    '''
+
+    async def create_wiki(self, request_id, data):
+        try:
+            await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
+            if "body" in data and data["body"]:
+                wiki = Wiki(wiki_content=data["body"], wiki_project=self.project)
+                await database_sync_to_async(self.save_db)(wiki)
+                response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Wiki page has been created.', 'data': []}
+                return await self.send_json(response)
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Wiki body is required.'}
+                return await self.send_json(response)
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            return await self.send_json(response)
+
+    
+    async def get_wiki(self, request_id, data):
+        wikis = await database_sync_to_async(self.get_json_wikis)()
+        await sync_to_async(print)(wikis)
+        response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Wikis.', 'data': wikis}
+        return await self.send_json(response)
+
+
+    def get_json_wikis(self):
+        wikis = self.project.wiki_set.all()
+        return WikiSerializer(wikis, many=True).data
+
+
+    async def update_wiki(self, request_id, data):
+        try:
+            await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
+            serializer = WikiUpdateSerializer(data=data)
+            if serializer.is_valid():
+                data_content = serializer.data
+                wiki = await database_sync_to_async(self.get_wiki_db)(wiki_id=data_content["id"])
+                if wiki:
+                    wiki.wiki_content = data_content["body"]
+                    await database_sync_to_async(self.save_db)(wiki)
+                    response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Wiki page has been updated.', 'data': []}
+                    return await self.send_json(response)
+                else:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Wiki not exists.'}
+                    return await self.send_json(response)
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Wiki body and id is required.'}
+                return await self.send_json(response)
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            return await self.send_json(response)
+            
+
+    async def delete_wiki(self, request_id, data):
+        try:
+            await self.role_permission(access_role_permissions=['Product owner', 'Scrum master', 'Project manager'])
+            if "id" in data and data["id"]:
+                wiki = await database_sync_to_async(self.get_wiki_db)(wiki_id=data["id"])
+                if wiki:
+                    await database_sync_to_async(self.delete_db)(wiki)
+                    response = {'status': 'success', 'code': 200, 'request_id': request_id, 'message': 'Wiki page has been deleted.', 'data': []}
+                    return await self.send_json(response)
+                else:
+                    response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Wiki not exists.'}
+                    return await self.send_json(response)
+            else:
+                response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': 'Wiki id is required.'}
+                return await self.send_json(response)
+        except PermissionError as pe:
+            response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
+            return await self.send_json(response)
+
+
+    def get_wiki_db(self, wiki_id):
+        return Wiki.objects.filter(wiki_project=self.project, id=wiki_id).first()
+
 
     '''
     Board Part
@@ -803,6 +889,13 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             response = {'status': 'error', 'code': 400, 'request_id': request_id, 'message': str(pe)}
             await self.send_json(response)
             return False
+
+
+    '''
+    Board Analytics
+    '''
+    async def get_board_analytics(self, request_id, data):
+        pass
 
 
     '''

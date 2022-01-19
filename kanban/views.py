@@ -5,7 +5,7 @@ from .models import InvitedProjects, Portfolio, Project, Workspace, BoardActivit
 from vifApp.models import User, UserNotification
 from .serializers import (PortfolioSerializer, KanbanProjectSerializer, ProjectSerializer, BoardActivitiesSerializer,
                         BoardSerializer, WorkspaceSerializer)
-from rest_framework import status
+from rest_framework import generics, status
 import jwt
 from threading import Thread
 from django.db.utils import IntegrityError
@@ -13,28 +13,34 @@ from django.conf import settings
 from vifApp.utils import VifUtils
 import pandas as pd
 from django.core.mail import send_mass_mail
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 from datetime import datetime as dt
 import csv
 import requests
 from django.http import HttpResponse
+from rest_framework.parsers import MultiPartParser
+
 
 
 '''
 WORKSPACE PART
 '''
-class AddGetWorkspaces(APIView):
+class AddGetWorkspaces(generics.GenericAPIView):
+    serializer_class = WorkspaceSerializer
+
     def get(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         workspaces = Workspace.objects.filter(workspace_user=user)
-        response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my workspaces', 'data': WorkspaceSerializer(workspaces, many=True).data}
+        response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my workspaces', 'data': self.serializer_class(workspaces, many=True).data}
         return Response(response)
 
 
     def post(self, request):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first() 
-        serializer = WorkspaceSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             user_data = serializer.data
             try:
@@ -42,7 +48,7 @@ class AddGetWorkspaces(APIView):
             except IntegrityError:
                 response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace Already exists'}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
-            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'({user_data["workspace_name"]}) Workspace has been created.', "data": WorkspaceSerializer(wrkspc).data}
+            response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'({user_data["workspace_name"]}) Workspace has been created.', "data": self.serializer_class(wrkspc).data}
             return Response(response)
         else:
             err = list(serializer.errors.items())
@@ -50,7 +56,9 @@ class AddGetWorkspaces(APIView):
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
     
-class SetGetWorkspace(APIView):
+class UpdateGetWorkspace(generics.GenericAPIView):
+    serializer_class = WorkspaceSerializer
+
     def get(self, request, workspace_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -58,7 +66,7 @@ class SetGetWorkspace(APIView):
             workspace = Workspace.objects.filter(workspace_user=user, workspace_uuid=workspace_uid).first()
             if workspace:
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my workspace', 
-                            'data': WorkspaceSerializer(workspace).data}
+                            'data': self.serializer_class(workspace).data}
                 return Response(response)
             else:
                 response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace not exists.', 'data': []}
@@ -76,9 +84,10 @@ class SetGetWorkspace(APIView):
             workspace = Workspace.objects.filter(workspace_user=user, workspace_uuid=workspace_uid).first()
             if workspace:
                 workspace.workspace_name = request.data["workspace_name"]
+                workspace.work_email = request.data["work_email"]
                 workspace.save()
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'workspace updated.', 
-                            'data': WorkspaceSerializer(workspace).data}
+                            'data': self.serializer_class(workspace).data}
                 return Response(response)
             else:
                 response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace not exists.', 'data': []}
@@ -110,7 +119,9 @@ class SetGetWorkspace(APIView):
 PORTFOLIO PART
 '''
 
-class AddGetPortfolios(APIView):
+class AddGetPortfolios(generics.GenericAPIView):
+    serializer_class = PortfolioSerializer
+
     def get(self, request, workspace_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -126,7 +137,7 @@ class AddGetPortfolios(APIView):
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my Portfolios', 'data': data}
                 return Response(response)
             else:
-                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Portfolios not exists.', 'data': []}
+                response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'No Portfolios exists in the workspace.', 'data': []}
                 return Response(response, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad_request', 'data': []}
@@ -135,14 +146,14 @@ class AddGetPortfolios(APIView):
     def post(self, request, workspace_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        serializer = PortfolioSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             try:
                 user_data = serializer.data
                 workspace = Workspace.objects.filter(workspace_user=user, workspace_uuid=workspace_uid).first()
                 if workspace:
                     prtfl = Portfolio.objects.create(workspace=workspace, portfolio_name=user_data["portfolio_name"])
-                    response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'{user_data["portfolio_name"]} Portfolio has been created.', "data": PortfolioSerializer(prtfl).data}
+                    response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'{user_data["portfolio_name"]} Portfolio has been created.', "data": self.serializer_class(prtfl).data}
                     return Response(response)
                 else:
                     response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Workspace not exists.', 'data': []}
@@ -156,7 +167,9 @@ class AddGetPortfolios(APIView):
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
 
-class SetGetPortfolio(APIView):
+class SetGetPortfolio(generics.GenericAPIView):
+    serializer_class = PortfolioSerializer
+
     def get(self, request, workspace_uid, portfolio_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -164,7 +177,7 @@ class SetGetPortfolio(APIView):
             portfolio = Portfolio.objects.filter(workspace__workspace_user=user, workspace__workspace_uuid=workspace_uid, portfolio_uuid=portfolio_uid).first()
             if portfolio:
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'my portfolio', 
-                            'data': PortfolioSerializer(portfolio).data}
+                            'data': self.serializer_class(portfolio).data}
                 return Response(response)
             else:
                 response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Portfolio or workspace not exists.', 'data': []}
@@ -178,7 +191,7 @@ class SetGetPortfolio(APIView):
     def put(self, request, workspace_uid, portfolio_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        serializer = PortfolioSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             try:
                 portfolio = Portfolio.objects.filter(workspace__workspace_user=user, workspace__workspace_uuid=workspace_uid, 
@@ -187,7 +200,7 @@ class SetGetPortfolio(APIView):
                     portfolio.portfolio_name = request.data["portfolio_name"]
                     portfolio.save()
                     response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'portfolio updated.', 
-                                'data': PortfolioSerializer(portfolio).data}
+                                'data': self.serializer_class(portfolio).data}
                     return Response(response)
                 else:
                     response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Portfolio not exists.', 'data': []}
@@ -220,7 +233,8 @@ class SetGetPortfolio(APIView):
 
 
 class PinPortfolio(APIView):
-    def get(self, request, workspace_uid, portfolio_uid, state):
+    @swagger_auto_schema(operation_description="workspace_uid & portfolio_uid should be TYPE of **UUID**, and PIN should be **1 or 0**")
+    def get(self, request, workspace_uid, portfolio_uid, pin):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         
@@ -233,7 +247,7 @@ class PinPortfolio(APIView):
         portfolio = Portfolio.objects.filter(workspace__workspace_user=user, workspace__workspace_uuid=workspace_uid, 
                                             portfolio_uuid=portfolio_uid).first()
         if portfolio:
-            if state == 1:
+            if pin == 1:
                 portfolio.pined_portfolio = True
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'{portfolio.portfolio_name} pined seccessfuly'}
             else:
@@ -248,9 +262,26 @@ class PinPortfolio(APIView):
 '''
 Porject PART
 '''
+class GetAllProjects(APIView):
+    def get(self, request, workspace_uid):
+        payload = permission_authontication_jwt(request)
+        user = User.objects.filter(id=payload['id']).first()
+        projects = Project.objects.filter(portfolio__workspace__workspace_user=user, portfolio__workspace__workspace_uuid=workspace_uid)
+        data = {}
+        if projects:
+            my_projects = [{"portfolio_name": prj.portfolio.portfolio_name, "project_name": prj.name, "workspace_uid": prj.portfolio.workspace.workspace_uuid, "portfolio_uid": prj.portfolio.portfolio_uuid, "project_uid": prj.project_uuid, "Pined": prj.pined_project} for prj in projects]
+            data["my_projects"] = my_projects
+        invited_projects = InvitedProjects.objects.filter(iuser=user)
+        if invited_projects: 
+            invited_prj_list = [{"portfolio_name": prj.inviter_project.portfolio.portfolio_name, "project_name": prj.inviter_project.name, "workspace_uid": prj.inviter_project.portfolio.workspace.workspace_uuid, "portfolio_uid": prj.inviter_project.portfolio.portfolio_uuid, "project_uid": prj.inviter_project.project_uuid, "Pined": prj.inviter_project.pined_project} for prj in invited_projects]
+            data["invited_projects"] = invited_prj_list
+        response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'All Projects', 'data': data}
+        return Response(response)
 
 
-class GetProject(APIView):
+class GetProject(generics.GenericAPIView):
+    serializer_class = ProjectSerializer
+
     def get(self, request, workspace_uid, portfolio_uid, project_uid): 
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -284,7 +315,7 @@ class GetProject(APIView):
                                     portfolio__workspace__workspace_uuid=workspace_uid,
                                     portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
         if project:
-            serializer = ProjectSerializer(project, data=request.data)
+            serializer = self.serializer_class(project, data=request.data)
             if serializer.is_valid():
                 serializer.save()
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'Project updated.', 'data': []}
@@ -311,14 +342,15 @@ class GetProject(APIView):
         else:
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'Project not exists'}
             return Response(response, status.HTTP_400_BAD_REQUEST)
-        
 
 
-class GetAllProjects(APIView):
-    def get(self, request, workspace_uid):
+class CreateProject(generics.GenericAPIView):
+    serializer_class = KanbanProjectSerializer
+    
+    def get(self, request, workspace_uid, portfolio_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        projects = Project.objects.filter(portfolio__workspace__workspace_user=user, portfolio__workspace__workspace_uuid=workspace_uid)
+        projects = Project.objects.filter(portfolio__workspace__workspace_user=user, portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid)
         data = {}
         if projects:
             my_projects = [{"portfolio_name": prj.portfolio.portfolio_name, "project_name": prj.name, "workspace_uid": prj.portfolio.workspace.workspace_uuid, "portfolio_uid": prj.portfolio.portfolio_uuid, "project_uid": prj.project_uuid, "Pined": prj.pined_project} for prj in projects]
@@ -330,12 +362,10 @@ class GetAllProjects(APIView):
         response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': 'All Projects', 'data': data}
         return Response(response)
 
-
-class CreateProject(APIView):
     def post(self, request, workspace_uid, portfolio_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
-        serializer = KanbanProjectSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             user_data = serializer.data
             portfolio = Portfolio.objects.filter(workspace__workspace_user=user, workspace__workspace_uuid=workspace_uid, portfolio_uuid=portfolio_uid).first()
@@ -381,7 +411,8 @@ class CreateProject(APIView):
 
 
 class PinUnpinProject(APIView):
-    def get(self, request, workspace_uid, portfolio_uid, project_uid, state):
+    @swagger_auto_schema(operation_description="workspace_uid & portfolio_uid & project_uid should be TYPE of **UUID**, and PIN should be **1 or 0**")
+    def get(self, request, workspace_uid, portfolio_uid, project_uid, pin):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
 
@@ -394,12 +425,12 @@ class PinUnpinProject(APIView):
 
         project = Project.objects.filter(project_uuid=project_uid, portfolio__workspace__workspace_user=user, portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid).first()
         if project:
-            if state == 1:
+            if pin == 1:
                 project.pined_project = True
                 response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'{project.name} pined seccessfuly'}
             else:
                 project.pined_project = False
-                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'{project_uid} unpined seccessfuly'}
+                response = {'status': 'success', 'code': status.HTTP_200_OK, 'message': f'{project.name} unpined seccessfuly'}
             project.save()
             return Response(response)
         else:
@@ -408,6 +439,11 @@ class PinUnpinProject(APIView):
 
 
 class ExportProjectActivities(APIView):
+
+    board_param_config = openapi.Parameter('board', in_=openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Filter by **Board name**", required=False) 
+    type_param_config = openapi.Parameter('type_of_activity', in_=openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Filter by **Type of activity**", required=False) 
+    useremail_param_config = openapi.Parameter('user_email', in_=openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Filter by **User email**", required=False) 
+    @swagger_auto_schema(manual_parameters=[board_param_config, type_param_config, useremail_param_config])
     def get(self, request, workspace_uid, portfolio_uid, project_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -466,7 +502,14 @@ class ExportProjectActivities(APIView):
 
 
 class ExportBoard(APIView):
+
+    board_param_config = openapi.Parameter('board', in_=openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Enter **Board name**", required=True) 
+
+    @swagger_auto_schema(manual_parameters=[board_param_config])
     def get(self, request, workspace_uid, portfolio_uid, project_uid):
+        if not "board" in request.GET:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'No board name provided'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         project = Project.objects.filter(portfolio__workspace__workspace_uuid=workspace_uid, portfolio__portfolio_uuid=portfolio_uid, project_uuid=project_uid).first()
@@ -507,6 +550,11 @@ class ExportBoard(APIView):
 
 
 class ImportBoard(APIView):
+
+    parser_classes = (MultiPartParser, )
+    csv_file_param = openapi.Parameter('board_csv_file', in_=openapi.IN_FORM, description='Upload **board csv file**', type=openapi.TYPE_FILE, required=True)
+    board_name_param = openapi.Parameter('board_name', in_=openapi.IN_FORM, description='Enter **board name**', type=openapi.TYPE_STRING, required=False)
+    @swagger_auto_schema(manual_parameters=[csv_file_param, board_name_param])
     def post(self, request, workspace_uid, portfolio_uid, project_uid):
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
@@ -581,7 +629,13 @@ class ImportBoard(APIView):
 Tasks PART
 '''
 class UplaodFileAWS(APIView):
+    parser_classes = (MultiPartParser, )
+    file_param = openapi.Parameter('attached_file', in_=openapi.IN_FORM, description='Upload **File**', type=openapi.TYPE_FILE, required=True)
+    @swagger_auto_schema(manual_parameters=[file_param])
     def post(self, request, workspace_uid, portfolio_uid, project_uid):
+        if not 'attached_file' in request.FILES:
+            response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'File is required'}
+            return Response(response, status.HTTP_400_BAD_REQUEST)
         payload = permission_authontication_jwt(request)
         user = User.objects.filter(id=payload['id']).first()
         project = Project.objects.filter(portfolio__workspace__workspace_uuid=workspace_uid, 
@@ -607,6 +661,8 @@ class UplaodFileAWS(APIView):
 MICROSOFT CALENDAR PART
 '''
 class GetMSCalendarEvents(APIView):
+    request_body=openapi.Schema(type=openapi.TYPE_OBJECT, required=['token'], properties={'token': openapi.Schema(type=openapi.TYPE_STRING)})
+    @swagger_auto_schema(request_body=request_body)
     def post(self, request):
         permission_authontication_jwt(request)
         url = "https://graph.microsoft.com/v1.0/me/events?$select=subject,body,bodyPreview,organizer,attendees,start,end,location"
@@ -621,6 +677,8 @@ class GetMSCalendarEvents(APIView):
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
 class GetMSEvent(APIView):
+    request_body=openapi.Schema(type=openapi.TYPE_OBJECT, required=['token', 'event_id'], properties={'token': openapi.Schema(type=openapi.TYPE_STRING), 'event_id': openapi.Schema(type=openapi.TYPE_STRING)})
+    @swagger_auto_schema(request_body=request_body)
     def post(self, request):
         permission_authontication_jwt(request)
         url = "https://graph.microsoft.com/v1.0/me/events/{}".format(request.data["event_id"])
@@ -636,6 +694,8 @@ class GetMSEvent(APIView):
 
 
 class DeleteMSEvent(APIView):
+    request_body=openapi.Schema(type=openapi.TYPE_OBJECT, required=['token', 'event_id'], properties={'token': openapi.Schema(type=openapi.TYPE_STRING), 'event_id': openapi.Schema(type=openapi.TYPE_STRING)})
+    @swagger_auto_schema(request_body=request_body)
     def delete(self, request):
         permission_authontication_jwt(request)
         url = "https://graph.microsoft.com/v1.0/me/events/{}".format(request.data["event_id"])
@@ -651,6 +711,8 @@ class DeleteMSEvent(APIView):
 
 
 class CancelMSEvent(APIView):
+    request_body=openapi.Schema(type=openapi.TYPE_OBJECT, required=['token', 'event_id'], properties={'token': openapi.Schema(type=openapi.TYPE_STRING), 'event_id': openapi.Schema(type=openapi.TYPE_STRING)})
+    @swagger_auto_schema(request_body=request_body)
     def post(self, request):
         permission_authontication_jwt(request)
         url = "https://graph.microsoft.com/v1.0/me/events/{}/cancel".format(request.data["event_id"])
@@ -669,6 +731,8 @@ class CancelMSEvent(APIView):
 GOOGLE CALENDAR PART
 '''
 class GetGGLEvents(APIView):
+    request_body=openapi.Schema(type=openapi.TYPE_OBJECT, required=['token'], properties={'token': openapi.Schema(type=openapi.TYPE_STRING)})
+    @swagger_auto_schema(request_body=request_body)
     def post(self, request):
         permission_authontication_jwt(request)
         url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/"
@@ -684,6 +748,8 @@ class GetGGLEvents(APIView):
 
 
 class GetDeleteGGLEvent(APIView):
+    request_body=openapi.Schema(type=openapi.TYPE_OBJECT, required=['token', 'event_id'], properties={'token': openapi.Schema(type=openapi.TYPE_STRING), 'event_id': openapi.Schema(type=openapi.TYPE_STRING)})
+    @swagger_auto_schema(request_body=request_body)
     def post(self, request):
         permission_authontication_jwt(request)
         url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/{}".format(request.data["event_id"])
@@ -697,6 +763,7 @@ class GetDeleteGGLEvent(APIView):
             response = {'status': 'error', 'code': status.HTTP_400_BAD_REQUEST, 'message': 'bad request'}
             return Response(response, status.HTTP_400_BAD_REQUEST)
 
+    @swagger_auto_schema(request_body=request_body)
     def delete(self, request):
         permission_authontication_jwt(request)
         url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/{}".format(request.data["event_id"])
@@ -717,7 +784,7 @@ Authontication
 '''
 def permission_authontication_jwt(request):
     try:
-        token = request.META['HTTP_AUTHORIZATION'].split(' ')[1]
+        token = request.META['HTTP_AUTHORIZATION'].split(' ')[-1]
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
     except jwt.DecodeError:
         response = {

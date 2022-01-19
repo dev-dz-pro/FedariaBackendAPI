@@ -5,15 +5,13 @@ from rest_framework import status
 import re
 
 
-class UserSerializer(serializers.ModelSerializer):
+
+class UserSerializer(serializers.Serializer):
     first_name = serializers.CharField(required=True, min_length=2)
     last_name = serializers.CharField(required=True, min_length=2)
     email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
-    password = serializers.CharField(style={'input_type': 'password'}, write_only=True, required=True, min_length=8)
+    password = serializers.CharField(style={'input_type': 'password'}, required=True, min_length=8)
     
-    class Meta:
-        model = User
-        fields = ['username', 'name', 'first_name', 'last_name', 'email', 'password']
 
     def validate(self, data):
         psw = data.get('password')
@@ -22,21 +20,44 @@ class UserSerializer(serializers.ModelSerializer):
             raise ValidationError({"pswrd": "should have at least 1 Uppercase Charecter."})
         return data
         
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        email_exists = User.objects.filter(email=validated_data["email"]).exists()
-        if email_exists:
-            response = {
-                'status': 'error',
-                'code': status.HTTP_400_BAD_REQUEST,
-                'message': 'Email already exists, please Signin!'
-            }
-            raise ValidationError(response)
-        instance = self.Meta.model(**validated_data)
-        if password is not None:
-            instance.set_password(password)
-            instance.save()
-        return instance
+
+# class UserSerializer(serializers.ModelSerializer):
+#     first_name = serializers.CharField(required=True, min_length=2)
+#     last_name = serializers.CharField(required=True, min_length=2)
+#     email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
+#     password = serializers.CharField(style={'input_type': 'password'}, write_only=True, required=True, min_length=8)
+    
+#     class Meta:
+#         model = User
+#         fields = ['username', 'name', 'first_name', 'last_name', 'email', 'password']
+
+#     def validate(self, data):
+#         psw = data.get('password')
+#         has_upper = any(n.isupper() for n in psw)
+#         if not has_upper:
+#             raise ValidationError({"pswrd": "should have at least 1 Uppercase Charecter."})
+#         return data
+        
+#     def create(self, validated_data):
+#         password = validated_data.pop('password', None)
+#         email_exists = User.objects.filter(email=validated_data["email"]).exists()
+#         if email_exists:
+#             response = {
+#                 'status': 'error',
+#                 'code': status.HTTP_400_BAD_REQUEST,
+#                 'message': 'Email already exists, please Signin!'
+#             }
+#             raise ValidationError(response)
+#         instance = self.Meta.model(**validated_data)
+#         if password is not None:
+#             instance.set_password(password)
+#             instance.save()
+#         return instance
+
+
+
+class JwtTokenSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=True, max_length=600)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -81,10 +102,15 @@ class UpdateAccountSerializer(serializers.Serializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
-    model = User
     old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
-    new_password1 = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, min_length=8)
+    new_password1 = serializers.CharField(required=True, min_length=8)
+    def validate(self, data):
+        psw = data.get('new_password')
+        has_upper = any(n.isupper() for n in psw)
+        if not has_upper:
+            raise ValidationError({"pswrd": "should have at least 1 Uppercase Charecter."})
+        return data
 
 
 class UpdateProfileSerializer(serializers.Serializer):
@@ -103,14 +129,23 @@ class UpdateProfileSerializer(serializers.Serializer):
 
 
 class UpdateProfileImageSerializer(serializers.Serializer):
-    model = User
     profile_img_url = serializers.FileField(max_length=None, allow_empty_file=False)
-    # profile_title = serializers.CharField(allow_blank=True, allow_null=True)
 
 
 class ResetPasswordSerializer(serializers.Serializer):
-    model = User
     email = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
+
+
+class NewPassSerializer(serializers.Serializer):
+    new_pass = serializers.CharField(required=True, min_length=8)
+    confirm_new_pass = serializers.CharField(required=True, min_length=8)
+
+    def validate(self, data):
+        psw = data.get('new_pass')
+        has_upper = any(n.isupper() for n in psw)
+        if not has_upper:
+            raise ValidationError({"pswrd": "should have at least 1 Uppercase Charecter."})
+        return data
 
 
 class UserNotificationSerializer(serializers.ModelSerializer):
@@ -118,3 +153,4 @@ class UserNotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserNotification
         fields = ("notification_from", "notification_text", "notification_url", "created_at")
+

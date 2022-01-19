@@ -1,12 +1,12 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import Board, BoardActivities, Portfolio, Project, UserDirectMessages, Workspace, ProjectGroupeChat
+from .models import Board, BoardActivities, Portfolio, Project, UserDirectMessages, Workspace, ProjectGroupeChat, Wiki
 from vifApp.models import User
 
 
 
 class WorkspaceSerializer(serializers.ModelSerializer):
-    workspace_name = serializers.CharField(required=True)
+    workspace_name = serializers.CharField(required=True, min_length=2)
     work_email = serializers.EmailField(max_length=None, min_length=None, allow_blank=True)  
     class Meta:
         model = Workspace
@@ -14,22 +14,11 @@ class WorkspaceSerializer(serializers.ModelSerializer):
 
 
 class PortfolioSerializer(serializers.ModelSerializer):
-    portfolio_name = serializers.CharField(required=True)
+    portfolio_name = serializers.CharField(required=True, min_length=2)
+    pined_portfolio = serializers.BooleanField(default=False)
     class Meta:
         model = Portfolio
-        fields = ("portfolio_name", "portfolio_uuid", "pined_portfolio", "created_at")
-
-    # def validate(self, data):
-    #     _name = data.get('portfolio_name')
-    #     if str(_name).__contains__('/'):  
-    #         raise ValidationError({"portfolio name": "field should not contain '/'."})
-    #     return data
-
-
-class ProjectSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Project
-        fields = ("name", "project_uuid", "created_at")
+        fields = ("portfolio_name", "portfolio_uuid", "pined_portfolio", "created_at") 
 
 
 class BoardSerializer(serializers.ModelSerializer):
@@ -63,19 +52,36 @@ class BPPSerializer(serializers.ModelSerializer):
         fields = ("portfolio_name", "project_name", "name")
 
 
+class ProjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Project
+        fields = ("name", "project_uuid", "created_at")
+
 class KanbanProjectSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     projectdescription = serializers.CharField(allow_blank=True)
     agileframwork = serializers.CharField(required=True)
-    productowner = serializers.EmailField(max_length=None, min_length=None, allow_blank=True)
-    scrummaster = serializers.EmailField(max_length=None, min_length=None, allow_blank=True)
+    productowner = serializers.EmailField(required=False, max_length=None, min_length=None, allow_blank=True)
+    scrummaster = serializers.EmailField(required=False, max_length=None, min_length=None, allow_blank=True)
 
-    # def validate(self, data):
-    #     _name = data.get('name')
-    #     if str(_name).__contains__('/'):  
-    #         raise ValidationError({"name": "field should not contain '/'."})
-    #     return data
-        
+    def validate(self, data):
+        stts = data.get('agileframwork')
+        if not stts in ['Kanban', 'Scrum']:
+            raise ValidationError({"agileframwork": "should be (Kanban or Scrum)"})
+        return data
+
+
+class WikiSerializer(serializers.ModelSerializer):
+    project_name = serializers.CharField(read_only=True, source="wiki_project.name")
+    class Meta:
+        model = Wiki
+        fields = ("id", "project_name", "wiki_content", "wiki_created_at", "wiki_updated_at")
+
+
+class WikiUpdateSerializer(serializers.Serializer):
+    body = serializers.CharField(required=True)
+    id = serializers.IntegerField(required=True)
+
 
 class InviteUsersSerializer(serializers.Serializer):
     users_email = serializers.ListField(required=True)

@@ -3,16 +3,16 @@ from . import views
 
 urlpatterns = [
     path('workspaces/', views.AddGetWorkspaces.as_view(), name="workspace"),
-    path('workspaces/<uuid:workspace_uid>/', views.SetGetWorkspace.as_view(), name="set-workspace"),
+    path('workspaces/<uuid:workspace_uid>/', views.UpdateGetWorkspace.as_view(), name="set-workspace"),
 
     path('workspaces/<uuid:workspace_uid>/portfolios/', views.AddGetPortfolios.as_view(), name="portfolios"),
     path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/', views.SetGetPortfolio.as_view(), name="set-portfolio"),
-    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/<int:state>/', views.PinPortfolio.as_view(), name="pin-unpin-portfolio"),
+    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/<int:pin>/', views.PinPortfolio.as_view(), name="pin-unpin-portfolio"),
 
 
     path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/', views.CreateProject.as_view(), name="create-project"),
     path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/', views.GetProject.as_view(), name="project"),
-    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/<int:state>/', views.PinUnpinProject.as_view(), name="pin-unpin-project"),
+    path('workspaces/<uuid:workspace_uid>/portfolios/<uuid:portfolio_uid>/projects/<uuid:project_uid>/<int:pin>/', views.PinUnpinProject.as_view(), name="pin-unpin-project"),
     path('workspaces/<uuid:workspace_uid>/projects/', views.GetAllProjects.as_view(), name="projects"), 
 
     # path('search_project/<str:project_name>/', views.Search4Project.as_view(), name="search-project"), # wss

@@ -12,7 +12,7 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     name = models.CharField(max_length=50)
     email = models.CharField(max_length=255, unique=True) # , blank=True, null=True
-    social_id = models.CharField(max_length=50, blank=True, null=True)
+    # social_id = models.CharField(max_length=50, blank=True, null=True)
     phone_number = models.CharField(max_length=17, blank=True, null=True)
     profile_image = models.URLField(max_length=600, default="https://vifbox.org/api/media/default.jpg") # profile_image = models.ImageField(default="default.jpg", upload_to="profile_pics")
     profile_title = models.CharField(max_length=255)
